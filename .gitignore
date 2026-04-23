@@ -1,3 +1,6 @@
+# Generated artifacts
+docs/interactive_docs.html
+
 # Runtime data
 data/*.db
 __pycache__/
