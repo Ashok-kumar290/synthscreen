@@ -1,0 +1,42 @@
+{
+  "model_type": "dnabert2",
+  "dnabert2_model_id": "zhihan1996/DNABERT-2-117M",
+
+  "dataset_path": "data/processed/synthscreen_dna_v1_dataset",
+  "max_seq_length": 512,
+
+  "lora_r": 16,
+  "lora_alpha": 32,
+  "lora_dropout": 0.1,
+
+  "epochs": 6,
+  "batch_size": 16,
+  "eval_batch_size": 32,
+  "learning_rate": 2e-4,
+  "weight_decay": 0.01,
+  "warmup_ratio": 0.1,
+  "lr_scheduler_type": "cosine",
+  "fp16": true,
+  "gradient_accumulation_steps": 2,
+
+  "use_focal_loss": true,
+  "focal_gamma": 2.0,
+  "focal_alpha": null,
+
+  "use_class_weights": true,
+
+  "early_stopping_patience": 3,
+  "early_stopping_threshold": 0.001,
+  "max_grad_norm": 1.0,
+  "label_smoothing": 0.05,
+
+  "hard_mining_enabled": true,
+  "hard_mining_rounds": 2,
+  "hard_mining_threshold": 0.3,
+  "hard_mining_oversample": 3,
+
+  "output_dir": "models/synthscreen_v1",
+  "logging_steps": 50,
+  "max_train_val_gap": 0.10,
+  "version": "v1"
+}
