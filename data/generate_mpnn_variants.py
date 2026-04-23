@@ -235,7 +235,7 @@ def generate_variants_dataset(n_seqs: int = 50, output_path: str = "data/mpnn_va
 
             # Run ProteinMPNN
             print(f"  Running ProteinMPNN (n={n_seqs}, temp=0.1)...")
-            protein_seqs = run_proteinmpnn(pdb_path, chain, n_seqs=n_seqs, mpnn_dir=mpnn_dir)
+            protein_seqs = run_proteinmpnn(pdb_path, chain, n_seqs=n_seqs, mpnn_script_dir=mpnn_dir)
 
             if not protein_seqs:
                 print(f"  No sequences generated, skipping.")
