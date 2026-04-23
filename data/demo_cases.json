@@ -1,0 +1,190 @@
+[
+  {
+    "id": "demo-safe-001",
+    "submitted_at": "2026-04-20T09:15:00+00:00",
+    "sequence_text": "ATGGCTGCTTCTGGTGCTGCTGCTTCTGGTGACCTGACTGACTAA",
+    "sequence_type": "DNA",
+    "hazard_score": 0.18,
+    "risk_level": "SAFE",
+    "confidence": 0.91,
+    "category": "Routine metabolic gene signature",
+    "explanation": "Seeded demo case representing a low-concern functional profile with no elevated review cues.",
+    "baseline_result": "Baseline similarity mock: routine profile, no alert.",
+    "model_name": "biolens-demo-seed",
+    "analyst_status": "CLEARED",
+    "analyst_notes": "Used in judge walkthrough as the low-risk control case.",
+    "final_action": "APPROVE",
+    "reviewed_at": "2026-04-20T10:05:00+00:00",
+    "audit_events": [
+      {
+        "event_type": "case_created",
+        "event_time": "2026-04-20T09:15:00+00:00",
+        "details": {
+          "risk_level": "SAFE",
+          "hazard_score": 0.18,
+          "source": "demo_seed"
+        }
+      },
+      {
+        "event_type": "status_change",
+        "event_time": "2026-04-20T10:00:00+00:00",
+        "details": {
+          "from": "NEW",
+          "to": "CLEARED"
+        }
+      },
+      {
+        "event_type": "action_set",
+        "event_time": "2026-04-20T10:05:00+00:00",
+        "details": {
+          "from": null,
+          "to": "APPROVE"
+        }
+      }
+    ]
+  },
+  {
+    "id": "demo-review-001",
+    "submitted_at": "2026-04-21T07:40:00+00:00",
+    "sequence_text": "MNNQSTVVAGLALALATASAQAAPVVGKKDNNTGAPQATVVSTLQQLAATG",
+    "sequence_type": "PROTEIN",
+    "hazard_score": 0.57,
+    "risk_level": "REVIEW",
+    "confidence": 0.83,
+    "category": "Unresolved signaling-like pattern",
+    "explanation": "Seeded demo case representing an ambiguous function-aware profile that should be manually reviewed.",
+    "baseline_result": "Baseline similarity mock: partial signal overlap, manual review recommended.",
+    "model_name": "biolens-demo-seed",
+    "analyst_status": "IN_REVIEW",
+    "analyst_notes": "Analyst comparing context against supplier order metadata.",
+    "final_action": "MANUAL_REVIEW",
+    "reviewed_at": "2026-04-21T08:10:00+00:00",
+    "audit_events": [
+      {
+        "event_type": "case_created",
+        "event_time": "2026-04-21T07:40:00+00:00",
+        "details": {
+          "risk_level": "REVIEW",
+          "hazard_score": 0.57,
+          "source": "demo_seed"
+        }
+      },
+      {
+        "event_type": "status_change",
+        "event_time": "2026-04-21T08:05:00+00:00",
+        "details": {
+          "from": "NEW",
+          "to": "IN_REVIEW"
+        }
+      },
+      {
+        "event_type": "action_set",
+        "event_time": "2026-04-21T08:10:00+00:00",
+        "details": {
+          "from": null,
+          "to": "MANUAL_REVIEW"
+        }
+      }
+    ]
+  },
+  {
+    "id": "demo-high-001",
+    "submitted_at": "2026-04-22T05:20:00+00:00",
+    "sequence_text": "ATGCGCGCGTTTGGGCGCGCGTTTGGGCGCGCGTTTGGGTAA",
+    "sequence_type": "DNA",
+    "hazard_score": 0.83,
+    "risk_level": "HIGH",
+    "confidence": 0.88,
+    "category": "Elevated host-interaction signature",
+    "explanation": "Seeded demo case representing a high-priority flag for the review queue and escalation workflow.",
+    "baseline_result": "Baseline similarity mock: inconclusive; function-aware adapter retained a high-priority flag.",
+    "model_name": "biolens-demo-seed",
+    "analyst_status": "ESCALATED",
+    "analyst_notes": "Escalated for additional biosafety review during the demo workflow.",
+    "final_action": "ESCALATE",
+    "reviewed_at": "2026-04-22T05:55:00+00:00",
+    "audit_events": [
+      {
+        "event_type": "case_created",
+        "event_time": "2026-04-22T05:20:00+00:00",
+        "details": {
+          "risk_level": "HIGH",
+          "hazard_score": 0.83,
+          "source": "demo_seed"
+        }
+      },
+      {
+        "event_type": "status_change",
+        "event_time": "2026-04-22T05:50:00+00:00",
+        "details": {
+          "from": "NEW",
+          "to": "ESCALATED"
+        }
+      },
+      {
+        "event_type": "action_set",
+        "event_time": "2026-04-22T05:55:00+00:00",
+        "details": {
+          "from": null,
+          "to": "ESCALATE"
+        }
+      }
+    ]
+  },
+  {
+    "id": "demo-safe-002",
+    "submitted_at": "2026-04-23T11:05:00+00:00",
+    "sequence_text": "MSTNPKPQRKTKRNTNRRPQDVKFPGGGQIVGGVLTNATDKA",
+    "sequence_type": "PROTEIN",
+    "hazard_score": 0.29,
+    "risk_level": "SAFE",
+    "confidence": 0.76,
+    "category": "Common cellular maintenance pattern",
+    "explanation": "Seeded demo case showing a stored result that was screened but has not yet been reviewed.",
+    "baseline_result": "Baseline similarity mock: routine profile, no alert.",
+    "model_name": "biolens-demo-seed",
+    "analyst_status": "NEW",
+    "analyst_notes": null,
+    "final_action": null,
+    "reviewed_at": null,
+    "audit_events": [
+      {
+        "event_type": "case_created",
+        "event_time": "2026-04-23T11:05:00+00:00",
+        "details": {
+          "risk_level": "SAFE",
+          "hazard_score": 0.29,
+          "source": "demo_seed"
+        }
+      }
+    ]
+  },
+  {
+    "id": "demo-review-002",
+    "submitted_at": "2026-04-23T17:45:00+00:00",
+    "sequence_text": "ATGAAACCGTATATATGCCGCGATGGGACTGACTGACTGACTAA",
+    "sequence_type": "DNA",
+    "hazard_score": 0.64,
+    "risk_level": "REVIEW",
+    "confidence": 0.82,
+    "category": "Regulatory activity worth analyst review",
+    "explanation": "Seeded demo case giving the inbox a second active review item and more varied analytics.",
+    "baseline_result": "Baseline similarity mock: partial signal overlap, manual review recommended.",
+    "model_name": "biolens-demo-seed",
+    "analyst_status": "NEW",
+    "analyst_notes": null,
+    "final_action": null,
+    "reviewed_at": null,
+    "audit_events": [
+      {
+        "event_type": "case_created",
+        "event_time": "2026-04-23T17:45:00+00:00",
+        "details": {
+          "risk_level": "REVIEW",
+          "hazard_score": 0.64,
+          "source": "demo_seed"
+        }
+      }
+    ]
+  }
+]
