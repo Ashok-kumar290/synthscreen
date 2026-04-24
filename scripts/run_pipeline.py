@@ -107,6 +107,25 @@ def blast_proxy(seq, refs, k=7, thresh=0.70):
             return True
     return False
 
+
+def blast_real(seq, db="hazard_db", thresh=70.0) -> bool:
+    """Run actual blastn against local hazard database. Falls back to proxy if BLAST unavailable."""
+    import subprocess, tempfile, os
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.fasta', delete=False) as f:
+            f.write(f'>query\n{seq}\n')
+            qfile = f.name
+        result = subprocess.run(
+            ["blastn", "-query", qfile, "-db", db,
+             "-outfmt", "6 pident", "-max_hsps", "1", "-max_target_seqs", "1",
+             "-perc_identity", str(thresh), "-dust", "no", "-task", "blastn-short"],
+            capture_output=True, text=True, timeout=30
+        )
+        os.unlink(qfile)
+        return bool(result.stdout.strip())
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
 def metrics(labels, preds, probs):
     labels, preds = list(labels), list(preds)
     cm = confusion_matrix(labels, preds)
@@ -261,9 +280,15 @@ def main():
     print(f"Test: {len(test)} seqs | hazardous={sum(labels)} | "
           f"short={len(short_idx)} | ai-variants={len(ai_idx)}")
 
-    # ── BLAST proxy ───────────────────────────────────────────────────────────
-    print("\n[BLAST proxy]")
-    blast_p = np.array([int(blast_proxy(s, refs)) for s in seqs])
+    # ── BLAST (real blastn if available, else proxy) ───────────────────────────
+    import shutil
+    use_real_blast = shutil.which("blastn") is not None and os.path.exists("hazard_db.nhr")
+    if use_real_blast:
+        print("\n[BLAST — real blastn against hazard_db]")
+        blast_p = np.array([int(blast_real(s)) for s in seqs])
+    else:
+        print("\n[BLAST proxy — k-mer Jaccard (blastn not found)]")
+        blast_p = np.array([int(blast_proxy(s, refs)) for s in seqs])
     ALL["blast_full"] = show("BLAST — Full", metrics(labels, blast_p, blast_p.astype(float)))
     if short_idx:
         sl = [labels[i] for i in short_idx]
