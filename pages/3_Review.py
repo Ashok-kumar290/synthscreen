@@ -16,6 +16,8 @@ from services.ui import (
     render_metric_card,
     risk_badge,
     status_badge,
+    render_threat_radar,
+    render_attributed_sequence,
 )
 
 
@@ -88,9 +90,13 @@ with detail_col:
         unsafe_allow_html=True,
     )
 
+    if case.get("threat_breakdown"):
+        st.markdown("#### Structured Threat Assessment")
+        render_threat_radar(case["threat_breakdown"])
+        
     st.markdown("#### Sequence")
     st.caption(f"{len(case['sequence_text'])} characters • {case['sequence_type']}")
-    st.code(case["sequence_text"], language="text", wrap_lines=True)
+    render_attributed_sequence(case["sequence_text"], case.get("attribution_data"))
 
     st.markdown("#### Baseline Comparison")
     st.write(case["baseline_result"] or "No baseline comparison is stored for this case.")

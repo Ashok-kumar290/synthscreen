@@ -8,7 +8,7 @@ import streamlit as st
 from services import bootstrap_application, get_runtime_mode
 from services.model_interface import screen_sequence
 from services.storage import save_screening_case
-from services.ui import apply_page_style, format_timestamp, render_hero, render_metric_card, risk_badge
+from services.ui import apply_page_style, format_timestamp, render_hero, render_metric_card, risk_badge, render_threat_radar
 
 
 def parse_fasta_records(raw_text: str) -> list[dict[str, str]]:
@@ -85,6 +85,10 @@ def render_result_card(item: dict[str, Any]) -> None:
         render_metric_card("Model", result["model_name"], "Audit-visible identifier")
     if result["baseline_result"]:
         st.caption(f"Baseline comparison: {result['baseline_result']}")
+        
+    if result.get("threat_breakdown"):
+        st.markdown("#### Structured Threat Assessment")
+        render_threat_radar(result["threat_breakdown"])
 
 
 st.set_page_config(page_title="BioLens Screening", layout="wide")

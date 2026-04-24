@@ -27,6 +27,8 @@ SCREENING_COLUMNS = (
     "analyst_notes",
     "final_action",
     "reviewed_at",
+    "threat_breakdown",
+    "attribution_data",
 )
 
 
@@ -67,7 +69,9 @@ def init_db() -> None:
             analyst_status TEXT NOT NULL DEFAULT 'NEW',
             analyst_notes TEXT,
             final_action TEXT,
-            reviewed_at TEXT
+            reviewed_at TEXT,
+            threat_breakdown TEXT,
+            attribution_data TEXT
         )
         """,
         """
@@ -125,6 +129,8 @@ def _normalize_screening_record(record: dict[str, Any]) -> dict[str, Any]:
         "analyst_notes": (str(record.get("analyst_notes")).strip() or None) if record.get("analyst_notes") is not None else None,
         "final_action": final_action,
         "reviewed_at": record.get("reviewed_at"),
+        "threat_breakdown": json.dumps(record.get("threat_breakdown")) if record.get("threat_breakdown") else None,
+        "attribution_data": json.dumps(record.get("attribution_data")) if record.get("attribution_data") else None,
     }
 
 
@@ -180,6 +186,8 @@ def save_screening_case(sequence_text: str, sequence_type: str, result: dict[str
             "analyst_notes": None,
             "final_action": None,
             "reviewed_at": None,
+            "threat_breakdown": result.get("threat_breakdown"),
+            "attribution_data": result.get("attribution_data"),
         },
         audit_events=[
             {
@@ -206,7 +214,14 @@ def get_screening(screening_id: str) -> dict[str, Any]:
         row = connection.execute("SELECT * FROM screenings WHERE id = ?", (screening_id,)).fetchone()
     if row is None:
         raise KeyError(f"Unknown screening id: {screening_id}")
-    return dict(row)
+    
+    result_dict = dict(row)
+    if result_dict.get("threat_breakdown"):
+        result_dict["threat_breakdown"] = json.loads(result_dict["threat_breakdown"])
+    if result_dict.get("attribution_data"):
+        result_dict["attribution_data"] = json.loads(result_dict["attribution_data"])
+        
+    return result_dict
 
 
 def list_screenings(

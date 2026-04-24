@@ -158,6 +158,16 @@ def _screen_mock(sequence: str, seq_type: str, model_name: str) -> dict[str, Any
             + hash_factor * 0.15
         )
         confidence = _clamp(0.58 + min(length / 900, 0.20) + (1 - abs(gc_fraction - 0.5)) * 0.15 + hash_factor * 0.07)
+        
+        pathogenicity = _clamp(0.2 + abs(gc_fraction - 0.5) * 0.4 + min(motif_hits * 0.05, 0.3))
+        evasion_potential = _clamp(0.1 + repeat_factor * 2 + hash_factor * 0.2)
+        synthesis_feasibility = _clamp(0.9 - min(length / 5000, 0.8))
+        environmental_resilience = _clamp(0.3 + gc_fraction * 0.4)
+        host_range = _clamp(0.4 + hash_factor * 0.3)
+        
+        attr_positions = [i for i, c in enumerate(sequence) if c in "GC" and i % 7 == 0]
+        attr_scores = [round(_clamp(0.4 + hash_factor * 0.6), 3) for _ in attr_positions]
+        regions = [{"start": 0, "end": min(30, length), "label": "GC-rich motif region", "score": round(pathogenicity, 3)}]
     else:
         hydrophobic_fraction = sum(character in "AVILMFWYC" for character in sequence) / length
         charged_fraction = sum(character in "KRDEH" for character in sequence) / length
@@ -177,6 +187,16 @@ def _screen_mock(sequence: str, seq_type: str, model_name: str) -> dict[str, Any
         confidence = _clamp(
             0.56 + min(length / 700, 0.20) + (1 - abs(charged_fraction - 0.22)) * 0.12 + hash_factor * 0.08
         )
+        
+        pathogenicity = _clamp(0.3 + abs(charged_fraction - 0.2) * 0.5 + min(motif_hits * 0.05, 0.3))
+        evasion_potential = _clamp(0.2 + low_complexity * 0.4 + hash_factor * 0.2)
+        synthesis_feasibility = _clamp(0.8 - min(length / 2000, 0.7))
+        environmental_resilience = _clamp(0.2 + hydrophobic_fraction * 0.5)
+        host_range = _clamp(0.5 + hash_factor * 0.2)
+
+        attr_positions = [i for i, c in enumerate(sequence) if c in "KRDEH" and i % 3 == 0]
+        attr_scores = [round(_clamp(0.5 + hash_factor * 0.5), 3) for _ in attr_positions]
+        regions = [{"start": 0, "end": min(20, length), "label": "Charged cluster", "score": round(pathogenicity, 3)}]
 
     risk_level = _risk_level_from_score(score)
     category = _pick_category(seq_type, risk_level, sequence)
@@ -191,6 +211,18 @@ def _screen_mock(sequence: str, seq_type: str, model_name: str) -> dict[str, Any
         "baseline_result": _baseline_result(risk_level),
         "model_name": model_name,
         "error": None,
+        "threat_breakdown": {
+            "pathogenicity": round(pathogenicity, 3),
+            "evasion_potential": round(evasion_potential, 3),
+            "synthesis_feasibility": round(synthesis_feasibility, 3),
+            "environmental_resilience": round(environmental_resilience, 3),
+            "host_range": round(host_range, 3),
+        },
+        "attribution_data": {
+            "positions": attr_positions,
+            "scores": attr_scores,
+            "regions": regions,
+        }
     }
 
 
@@ -218,6 +250,8 @@ def _coerce_integrated_response(payload: dict[str, Any], fallback_model_name: st
             "baseline_result": str(payload.get("baseline_result")) if payload.get("baseline_result") else None,
             "model_name": str(payload.get("model_name") or fallback_model_name),
             "error": None,
+            "threat_breakdown": payload.get("threat_breakdown"),
+            "attribution_data": payload.get("attribution_data"),
         }
     except (TypeError, ValueError) as exc:
         return _error_response(fallback_model_name, f"invalid_integrated_response:{exc}")

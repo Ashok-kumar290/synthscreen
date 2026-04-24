@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import html
 from datetime import datetime
+from typing import Any
 
+import plotly.graph_objects as go
 import streamlit as st
 
 from services.constants import ACTION_STYLES, RISK_STYLES, STATUS_STYLES
@@ -277,3 +279,78 @@ def format_timestamp(value: str | None) -> str:
     except ValueError:
         return value
     return parsed.astimezone().strftime("%d %b %Y, %H:%M")
+
+
+def render_threat_radar(breakdown: dict[str, Any] | None) -> None:
+    if not breakdown:
+        return
+        
+    categories = [
+        "Pathogenicity",
+        "Evasion Potential",
+        "Synthesis Feasibility",
+        "Env. Resilience",
+        "Host Range",
+    ]
+    values = [
+        breakdown.get("pathogenicity", 0),
+        breakdown.get("evasion_potential", 0),
+        breakdown.get("synthesis_feasibility", 0),
+        breakdown.get("environmental_resilience", 0),
+        breakdown.get("host_range", 0),
+    ]
+    
+    # Close the polygon
+    categories = [*categories, categories[0]]
+    values = [*values, values[0]]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatterpolar(
+        r=values,
+        theta=categories,
+        fill='toself',
+        line=dict(color='#e74c3c' if sum(values) > 2.5 else '#0f5a85'),
+        fillcolor='rgba(231, 76, 60, 0.2)' if sum(values) > 2.5 else 'rgba(15, 90, 133, 0.2)',
+    ))
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 1]),
+            bgcolor='rgba(0,0,0,0)'
+        ),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        showlegend=False,
+        margin=dict(l=40, r=40, t=20, b=20),
+        height=320,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def render_attributed_sequence(sequence: str, attribution_data: dict[str, Any] | None) -> None:
+    if not attribution_data or not attribution_data.get("positions"):
+        st.code(sequence, language="text", wrap_lines=True)
+        return
+
+    positions = set(attribution_data.get("positions", []))
+    scores = attribution_data.get("scores", [])
+    pos_to_score = dict(zip(attribution_data.get("positions", []), scores))
+
+    html_parts = ['<div class="bl-sequence-preview" style="line-height: 1.6; word-break: break-all; font-family: monospace;">']
+    
+    for i, char in enumerate(sequence):
+        if i in positions:
+            score = pos_to_score.get(i, 0)
+            # Red highlight based on score
+            bg_color = f"rgba(231, 76, 60, {min(score, 1.0) * 0.85})"
+            html_parts.append(f'<span style="background-color: {bg_color}; border-radius: 2px; padding: 0 1px;" title="Attribution: {score:.2f}">{char}</span>')
+        else:
+            html_parts.append(char)
+            
+    html_parts.append('</div>')
+    st.markdown("".join(html_parts), unsafe_allow_html=True)
+    
+    regions = attribution_data.get("regions", [])
+    if regions:
+        st.markdown("<div style='margin-top: 0.5rem; font-size: 0.85rem; color: var(--bl-muted);'><strong>Highlighted Regions:</strong></div>", unsafe_allow_html=True)
+        for r in regions:
+            st.markdown(f"<div style='font-size: 0.8rem; margin-top: 0.2rem;'>• {r['label']} (Pos {r['start']}-{r['end']}, Score {r['score']:.2f})</div>", unsafe_allow_html=True)
