@@ -54,10 +54,11 @@ def load_model(model_dir: str, model_type: str, base_model_id: Optional[str] = N
     tokenizer = AutoTokenizer.from_pretrained(base_model_id, trust_remote_code=True)
 
     if model_type == "dnabert2":
-        cfg = AutoConfig.from_pretrained(base_model_id, num_labels=2, trust_remote_code=True)
-        cfg.pad_token_id = tokenizer.pad_token_id or 0
         base = AutoModelForSequenceClassification.from_pretrained(
-            base_model_id, config=cfg, trust_remote_code=True
+            base_model_id,
+            num_labels=2,
+            trust_remote_code=True,
+            ignore_mismatched_sizes=True,
         )
     else:
         base = AutoModelForSequenceClassification.from_pretrained(base_model_id, num_labels=2)
