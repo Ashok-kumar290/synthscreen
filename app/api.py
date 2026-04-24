@@ -511,8 +511,15 @@ async def health():
 @app.post("/screen", response_model=ScreenResponse)
 async def screen_sequence(req: ScreenRequest):
     try:
+        seq = req.sequence.upper().replace("U", "T").strip()
+        if _is_protein(seq):
+            raise HTTPException(status_code=422, detail="protein_not_supported: submit coding DNA sequence")
+        if not _is_valid_dna(seq):
+            raise HTTPException(status_code=422, detail="invalid_sequence: not a valid DNA sequence")
         result = _screen_one(req.sequence, req.threshold_review, req.threshold_escalate)
         return ScreenResponse(**result)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -613,6 +620,13 @@ def _is_protein(seq: str) -> bool:
     return hits / n > 0.03
 
 
+def _is_valid_dna(seq: str) -> bool:
+    """Return True if at least 85% of characters are valid IUPAC DNA bases."""
+    valid = set("ACGTN")
+    n = max(len(seq), 1)
+    return sum(1 for c in seq if c in valid) / n >= 0.85
+
+
 @app.post("/biolens/screen")
 async def biolens_screen(req: BioLensRequest):
     """BioLens adapter — speaks the Track 3 contract schema."""
@@ -627,6 +641,14 @@ async def biolens_screen(req: BioLensRequest):
                     "explanation": "SynthGuard is a DNA-only screener. Protein sequences are not supported — please submit the coding DNA sequence instead.",
                     "baseline_result": None, "model_name": "synthguard-kmer",
                     "error": "protein_not_supported"}
+
+        # Reject random/garbage input that isn't DNA or protein
+        if not _is_valid_dna(seq):
+            return {"ok": False, "hazard_score": None, "risk_level": None,
+                    "confidence": None, "category": None,
+                    "explanation": "Input does not appear to be a valid DNA sequence. Please submit a nucleotide sequence (A/C/G/T/N characters).",
+                    "baseline_result": None, "model_name": "synthguard-kmer",
+                    "error": "invalid_sequence"}
 
         if len(seq) < 10:
             return {"ok": False, "hazard_score": None, "risk_level": None,
