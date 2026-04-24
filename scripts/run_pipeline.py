@@ -248,6 +248,8 @@ def main():
     # ── ESM-2 (optional) ──────────────────────────────────────────────────────
     if not args.skip_protein:
         print("\n[funcscreen ESM-2 650M]")
+        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
         AA = {"TTT":"F","TTC":"F","TTA":"L","TTG":"L","CTT":"L","CTC":"L","CTA":"L","CTG":"L",
               "ATT":"I","ATC":"I","ATA":"I","ATG":"M","GTT":"V","GTC":"V","GTA":"V","GTG":"V",
               "GCT":"A","GCC":"A","GCA":"A","GCG":"A","TAT":"Y","TAC":"Y","CAT":"H","CAC":"H",
@@ -255,16 +257,29 @@ def main():
               "GAA":"E","GAG":"E","TGT":"C","TGC":"C","TGG":"W","CGT":"R","CGC":"R","CGA":"R",
               "CGG":"R","AGA":"R","AGG":"R","AGT":"S","AGC":"S","TCT":"S","TCC":"S","TCA":"S",
               "TCG":"S","GGT":"G","GGC":"G","GGA":"G","GGG":"G","TAA":"*","TAG":"*","TGA":"*"}
-        def translate(dna):
-            return "".join(AA.get(dna[i:i+3], "X") for i in range(0, len(dna)-2, 3))
 
-        # Use all translatable sequences (divisible by 3, no stop codons, min 15aa)
+        def translate_best_frame(dna):
+            """Translate in all 3 frames, return longest ORF (truncated at first stop)."""
+            dna = dna.upper()
+            best = ""
+            for frame in range(3):
+                aa = "".join(AA.get(dna[i:i+3], "X")
+                             for i in range(frame, len(dna)-2, 3))
+                # Truncate at first stop codon
+                if "*" in aa:
+                    aa = aa[:aa.index("*")]
+                if len(aa) > len(best):
+                    best = aa
+            return best
+
+        # Keep only sequences >= 150bp (to get meaningful protein >= 50aa)
+        # and that yield >= 30aa in best reading frame
         prot_seqs, prot_lbls, prot_src = [], [], []
         for seq, lbl, src in zip(seqs, labels, sources):
-            if len(seq) % 3 != 0:
+            if len(seq) < 150:
                 continue
-            aa = translate(seq.upper())
-            if len(aa) >= 15 and "*" not in aa and "X" not in aa:
+            aa = translate_best_frame(seq)
+            if len(aa) >= 30:
                 prot_seqs.append(aa)
                 prot_lbls.append(lbl)
                 prot_src.append(src)
