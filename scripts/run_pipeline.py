@@ -214,6 +214,7 @@ def main():
         cfg = AutoConfig.from_pretrained(base_id, trust_remote_code=True)
         cfg.use_flash_attn = False
         cfg.num_labels = 2
+        cfg.pad_token_id = tok_dna.pad_token_id if tok_dna.pad_token_id is not None else 0
 
         with torch.device("cpu"):
             base_dna = AutoModelForSequenceClassification.from_pretrained(

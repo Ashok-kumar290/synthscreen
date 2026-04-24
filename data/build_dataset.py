@@ -26,6 +26,7 @@ from tqdm import tqdm
 
 # ── Select agent / biosecurity-relevant gene queries ──────────────────────────
 HAZARDOUS_QUERIES = [
+    # Original 10 families
     '"ricin" AND "RCA" AND "Ricinus communis"[Organism]',
     '"botulinum toxin" AND "type A"[All Fields] AND 1000:5000[SLEN]',
     '"anthrax" AND "lethal factor" AND "Bacillus anthracis"[Organism]',
@@ -36,6 +37,16 @@ HAZARDOUS_QUERIES = [
     '"Venezuelan equine encephalitis" AND "capsid"',
     '"Ebola virus" AND "glycoprotein" AND 500:3000[SLEN]',
     '"Marburg marburgvirus"[Organism] AND "nucleoprotein"',
+    # Added: families that failed OOD — high-GC and marine pathogens
+    '"Burkholderia mallei"[Organism] AND "virulence" AND 300:3000[SLEN]',
+    '"Burkholderia pseudomallei"[Organism] AND "toxin" AND 300:3000[SLEN]',
+    '"cholera toxin" AND "ctxA" AND "Vibrio cholerae"[Organism]',
+    '"abrin" AND "Abrus precatorius"[Organism]',
+    '"diphtheria toxin" AND "Corynebacterium diphtheriae"[Organism] AND 500:3000[SLEN]',
+    # Added: broader Select Agent coverage
+    '"botulinum toxin" AND "type B"[All Fields] AND 1000:5000[SLEN]',
+    '"botulinum toxin" AND "type E"[All Fields] AND 1000:5000[SLEN]',
+    '"Clostridium botulinum"[Organism] AND "neurotoxin" AND 500:4000[SLEN]',
 ]
 
 # Publicly safe, benign sequences

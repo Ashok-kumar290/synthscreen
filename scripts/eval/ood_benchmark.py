@@ -49,25 +49,27 @@ warnings.filterwarnings("ignore")
 # OOD set uses genuinely different toxin families / subtypes:
 
 OOD_HAZARDOUS = [
-    # Plant toxins - different from ricin (same superfamily but distinct sequences)
-    ('"abrin" AND "Abrus precatorius"[Organism]',
-     "Abrin (Abrus precatorius) — plant RIP toxin, distinct from ricin"),
-    # Bacterial toxins not in training
-    ('"diphtheria toxin" AND "Corynebacterium diphtheriae"[Organism] AND 500:3000[SLEN]',
-     "Diphtheria toxin — ADP-ribosyltransferase, Corynebacterium"),
+    # Tetanus — BoNT family but Clostridium tetani, not in training
     ('"tetanus toxin" AND "Clostridium tetani"[Organism]',
-     "Tetanus toxin — BoNT family but distinct serotype/organism"),
-    ('"cholera toxin" AND "ctxA" AND "Vibrio cholerae"[Organism]',
-     "Cholera toxin A subunit — ADP-ribosyltransferase"),
-    # Francisella tularensis (Tier 1 Select Agent, not in training)
+     "Tetanus toxin — BoNT family, different serotype/organism"),
+    # Francisella tularensis — intracellular pathogen, Tier 1 Select Agent
     ('"Francisella tularensis"[Organism] AND "virulence" AND 300:3000[SLEN]',
-     "Francisella tularensis virulence factors — tularemia agent"),
-    # Burkholderia (glanders/melioidosis - not in training)
-    ('"Burkholderia mallei"[Organism] AND "virulence" AND 300:3000[SLEN]',
-     "Burkholderia mallei — glanders agent, Tier 1 Select"),
-    # BoNT type B (training only had type A — same organism, different serotype)
-    ('"botulinum toxin" AND "type B"[All Fields] AND 1000:5000[SLEN]',
-     "Botulinum toxin type B — same organism, different serotype from training"),
+     "Francisella tularensis — tularemia agent, Tier 1 Select"),
+    # Brucella — Tier 1 Select Agent, zoonotic
+    ('"Brucella abortus"[Organism] AND "virulence" AND 300:3000[SLEN]',
+     "Brucella abortus — brucellosis, Tier 1 Select Agent"),
+    # Coxiella burnetii — Q fever, obligate intracellular
+    ('"Coxiella burnetii"[Organism] AND "virulence" AND 300:3000[SLEN]',
+     "Coxiella burnetii — Q fever agent, Tier 1 Select"),
+    # Clostridium difficile toxins — different clostridial species, not in training
+    ('"Clostridioides difficile"[Organism] AND "toxin A" AND 500:3000[SLEN]',
+     "C. difficile toxin A — large clostridial glucosylating toxin"),
+    # SARS-CoV-2 spike (emerging biosecurity concern, viral, not in training)
+    ('"SARS-CoV-2"[Organism] AND "spike protein" AND 500:4000[SLEN]',
+     "SARS-CoV-2 spike — emerging pathogen, RNA virus glycoprotein"),
+    # Variola/Orthopoxvirus — smallpox, Tier 1 Select Agent
+    ('"Variola virus"[Organism] AND 300:3000[SLEN]',
+     "Variola virus — smallpox, Tier 1 Select Agent"),
 ]
 
 OOD_BENIGN = [
@@ -344,8 +346,9 @@ def main():
     # ── Results ───────────────────────────────────────────────────────────────
     print("\n\n" + "="*70)
     print("OOD BENCHMARK RESULTS — UNSEEN TOXIN FAMILIES")
-    print("(Model trained on ricin/BoNT-A/anthrax/Yersinia/Shiga/VEEV/Ebola/Marburg)")
-    print("(Tested on abrin/diphtheria/tetanus/cholera/tularemia/glanders/BoNT-B)")
+    print("(Trained: ricin/BoNT-A,B,E/anthrax/Yersinia/Shiga/VEEV/Ebola/Marburg/")
+    print("         Burkholderia/Vibrio-cholera/abrin/diphtheria)")
+    print("(OOD: tetanus/Francisella/Brucella/Coxiella/C.diff/SARS-CoV-2/Variola)")
     print("="*70)
 
     slices = [
@@ -440,10 +443,12 @@ def main():
     output = {
         "description": "OOD benchmark on toxin families unseen during training",
         "training_families": [
-            "ricin (RCA)", "botulinum type A", "anthrax lethal factor",
+            "ricin (RCA)", "botulinum type A/B/E", "anthrax lethal factor",
             "Yersinia pestis", "Clostridium perfringens epsilon toxin",
             "Staph enterotoxin B", "Shiga toxin", "VEEV capsid",
             "Ebola glycoprotein", "Marburg nucleoprotein",
+            "Burkholderia mallei/pseudomallei", "Vibrio cholerae cholera toxin",
+            "abrin", "diphtheria toxin",
         ],
         "ood_families": [label.split("—")[0].strip() for _, label in OOD_HAZARDOUS],
         "n_sequences": len(seqs_eval),
