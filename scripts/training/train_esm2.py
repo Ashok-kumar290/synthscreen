@@ -161,6 +161,8 @@ def main():
     ap.add_argument("--lora_r",        type=int,   default=16)
     ap.add_argument("--lora_alpha",    type=int,   default=32)
     ap.add_argument("--mining_rounds", type=int,   default=2)
+    ap.add_argument("--resume",        action="store_true",
+                    help="Auto-resume from latest epoch checkpoint in output dir")
     args = ap.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
@@ -214,7 +216,27 @@ def main():
     best_state  = None
     current_train = train_items.copy()
 
-    for epoch in range(1, args.epochs + 1):
+    # Auto-resume from latest checkpoint
+    start_epoch = 1
+    if args.resume:
+        ckpts = sorted([
+            d for d in os.listdir(args.output)
+            if d.startswith("checkpoint_epoch_")
+        ])
+        if ckpts:
+            latest = os.path.join(args.output, ckpts[-1], "model_state_dict.pt")
+            meta_path = os.path.join(args.output, ckpts[-1], "meta.json")
+            if os.path.exists(latest):
+                print(f"  Resuming from {ckpts[-1]}...")
+                model.load_state_dict(torch.load(latest, map_location=DEVICE))
+                if os.path.exists(meta_path):
+                    with open(meta_path) as f:
+                        ckpt_meta = json.load(f)
+                    best_val_f1 = ckpt_meta.get("val_f1", 0.0)
+                    start_epoch = ckpt_meta.get("epoch", 0) + 1
+                print(f"  Resumed at epoch {start_epoch}, best val F1 so far: {best_val_f1:.3f}")
+
+    for epoch in range(start_epoch, args.epochs + 1):
         train_loader = make_loader(current_train, tokenizer, args.max_len,
                                    args.batch_size, balanced=True)
         scheduler = torch.optim.lr_scheduler.OneCycleLR(
@@ -247,6 +269,15 @@ def main():
             best_val_f1 = val_m["f1"]
             best_state  = {k: v.clone() for k, v in model.state_dict().items()}
             print(f"  ✓ New best val F1: {best_val_f1:.3f}")
+
+        # Save epoch checkpoint (so disconnect doesn't lose all progress)
+        ckpt_dir = os.path.join(args.output, f"checkpoint_epoch_{epoch}")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        torch.save(model.state_dict(), os.path.join(ckpt_dir, "model_state_dict.pt"))
+        with open(os.path.join(ckpt_dir, "meta.json"), "w") as f:
+            json.dump({"epoch": epoch, "val_f1": val_m["f1"],
+                       "val_metrics": val_m}, f, indent=2)
+        print(f"  Checkpoint saved: {ckpt_dir}")
 
         # Hard example mining
         if epoch <= args.mining_rounds and epoch < args.epochs:
