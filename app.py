@@ -57,6 +57,7 @@ with st.sidebar:
     st.page_link("pages/2_Inbox.py", label="Open Inbox")
     st.page_link("pages/3_Review.py", label="Open Review")
     st.page_link("pages/4_Analytics.py", label="Open Analytics")
+    st.page_link("pages/5_Intelligence.py", label="Open Intelligence")
 
     st.subheader("Export")
     st.download_button(

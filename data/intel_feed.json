@@ -1,0 +1,50 @@
+[
+  {
+    "title": "IBBIS Issues New DNA Synthesis Screening Guidelines",
+    "source": "IBBIS",
+    "date": "2026-04-12",
+    "category": "policy",
+    "summary": "The International Biosecurity and Biosafety Initiative for Science has released updated guidelines mandating function-based screening alongside sequence similarity searches.",
+    "relevance_to_screening": "Directly impacts the compliance requirements for the 'SAFE' vs 'REVIEW' thresholds in BioLens."
+  },
+  {
+    "title": "Novel Evasion Technique Identified in Open Source Models",
+    "source": "AIxBio Security Collective",
+    "date": "2026-04-18",
+    "category": "alert",
+    "summary": "A new technique utilizing synonymous codon substitution to evade basic BLAST-based screening has been reported in recent open-weight LLMs.",
+    "relevance_to_screening": "Validates the use of function-aware screening. Ensure Synthscreen adapter confidence scores reflect potential synonymous substitutions."
+  },
+  {
+    "title": "EU AI Act Biosecurity Provisions Enter Enforcement Phase",
+    "source": "European Commission",
+    "date": "2026-03-30",
+    "category": "policy",
+    "summary": "Biological design tools must now incorporate mandatory safeguards and audit logging under the EU AI Act's high-risk systems classification.",
+    "relevance_to_screening": "BioLens audit trail features directly support this compliance requirement."
+  },
+  {
+    "title": "OSTP Screening Framework Updated for AI Tools",
+    "source": "White House OSTP",
+    "date": "2026-04-05",
+    "category": "policy",
+    "summary": "The Office of Science and Technology Policy updated its synthesis screening framework to include specific evaluations for AI-generated sequences.",
+    "relevance_to_screening": "Requires BioLens operators to classify AI-generated versus naturally sourced sequence queries when known."
+  },
+  {
+    "title": "Advisory: Spike in Synthetic Pathogen Queries",
+    "source": "Global Biosecurity Alert Network",
+    "date": "2026-04-22",
+    "category": "alert",
+    "summary": "Providers report a 300% increase in queries for optimized viral vector sequences matching restricted taxonomy lists.",
+    "relevance_to_screening": "Operators should temporarily elevate the baseline risk tier for novel viral vector sequences."
+  },
+  {
+    "title": "Benchmarking Function-Aware Screening Systems",
+    "source": "Nature Biotechnology",
+    "date": "2026-04-10",
+    "category": "research",
+    "summary": "A new paper benchmarks Synthscreen and similar models against traditional heuristic screening, showing a 40% reduction in false negatives.",
+    "relevance_to_screening": "Supports the core Track 1 methodology. Reference this when discussing model confidence metrics."
+  }
+]
