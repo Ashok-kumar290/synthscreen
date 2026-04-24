@@ -50,6 +50,9 @@ HAZARDOUS_QUERIES = [
     # Added: fix Brucella 30% recall — add to training
     '"Brucella abortus"[Organism] AND "virulence" AND 300:3000[SLEN]',
     '"Brucella melitensis"[Organism] AND "virulence" AND 300:3000[SLEN]',
+    # Added: fix Coxiella 3.2% recall — AT-rich obligate intracellular pathogen
+    '"Coxiella burnetii"[Organism] AND "virulence" AND 300:3000[SLEN]',
+    '"Coxiella burnetii"[Organism] AND "effector" AND 300:3000[SLEN]',
 ]
 
 # Publicly safe, benign sequences
@@ -74,6 +77,11 @@ BENIGN_QUERIES = [
     '"Aspergillus niger"[Organism] AND "enzyme" AND 300:3000[SLEN]',
     '"Trichoderma reesei"[Organism] AND "cellulase" AND 300:3000[SLEN]',
     '"Chlamydomonas reinhardtii"[Organism] AND 300:2000[SLEN]',
+    # Added: fix high-GC false positives (Streptomyces 0.557 REVIEW)
+    '"Mycobacterium smegmatis"[Organism] AND "housekeeping" AND 300:3000[SLEN]',
+    '"Rhodococcus jostii"[Organism] AND 300:2000[SLEN]',
+    '"Deinococcus radiodurans"[Organism] AND "housekeeping" AND 300:2000[SLEN]',
+    '"Streptomyces venezuelae"[Organism] AND 300:2000[SLEN]',
 ]
 
 # Standard genetic code: codon -> list of synonymous codons
