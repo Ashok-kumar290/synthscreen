@@ -43,6 +43,32 @@ def _patch_auto_factory():
     _af._BaseAutoModelClass.register = _permissive_register
 
 _patch_auto_factory()
+
+
+# ── Patch DNABERT-2 flash_attn_triton for new Triton API ─────────────────────
+# Triton removed tl.dot(trans_b=True); replacement is tl.dot(a, tl.trans(b)).
+# Patch the cached kernel file in-place so it compiles on any Triton version.
+def _patch_flash_attn_triton():
+    import glob, re, shutil
+    for f in glob.glob('/root/.cache/huggingface/modules/transformers_modules/'
+                       'zhihan1996/DNABERT-2-117M/*/flash_attn_triton.py'):
+        text = open(f).read()
+        if 'trans_b=True' not in text:
+            continue
+        text = re.sub(
+            r'tl\.dot\(([^,]+),\s*([^,)]+),\s*trans_b=True',
+            r'tl.dot(\1, tl.trans(\2)',
+            text,
+        )
+        open(f, 'w').write(text)
+        cache = os.path.expanduser('~/.triton/cache')
+        if os.path.isdir(cache):
+            shutil.rmtree(cache, ignore_errors=True)
+        print(f'  flash_attn_triton.py patched (trans_b removed)')
+
+_patch_flash_attn_triton()
+
+
 from datasets import load_from_disk
 from huggingface_hub import hf_hub_download
 from peft import LoraConfig, get_peft_model, TaskType
