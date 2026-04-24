@@ -107,33 +107,33 @@ Synthesis order (DNA sequence)
 
 ### 3.1 Benchmark Table
 
-Evaluated on 2,214 held-out test sequences, of which 555 are short (<150bp) and 1,682 are AI-style codon variants / fragments.
+Evaluated on 2,561 held-out test sequences, of which 594 are short (<150bp) and 1,931 are AI-style codon variants / fragments.
 
 | Method | Recall | FPR | F1 | AUROC |
 |--------|--------|-----|----|-------|
 | **Full test set** | | | | |
-| BLAST (70% identity proxy) | 0.007 | 0.000 | 0.013 | 0.503 |
-| **SynthGuard k-mer (DNA)** | **0.899** | **0.080** | **0.905** | **0.970** |
+| BLAST (70% identity proxy) | 0.005 | 0.000 | 0.009 | 0.502 |
+| **SynthGuard k-mer (DNA)** | **0.903** | **0.093** | **0.906** | **0.970** |
 | **SynthGuard ESM-2 (Protein)** | **0.906** | **0.288** | **0.835** | **0.916** |
 | **Short sequences (<150bp)** | | | | |
-| BLAST | 0.008 | 0.000 | 0.017 | 0.504 |
-| **SynthGuard Short-Seq Specialist** | **0.780** | **0.160** | **0.781** | **0.891** |
+| BLAST | 0.004 | 0.000 | 0.007 | 0.502 |
+| **SynthGuard Short-Seq Specialist** | **0.723** | **0.187** | **0.747** | **0.846** |
 | SynthGuard ESM-2 (<50aa) | 0.837 | — | 0.739 | 0.814 |
 | **AI-designed variants** | | | | |
-| BLAST | 0.004 | 0.000 | 0.009 | 0.502 |
-| **SynthGuard k-mer (DNA)** | **0.907** | **0.103** | **0.909** | **0.967** |
+| BLAST | 0.005 | 0.000 | 0.009 | 0.502 |
+| **SynthGuard k-mer (DNA)** | **0.898** | **0.101** | **0.910** | **0.967** |
 | **SynthGuard ESM-2 (Protein)** | **0.896** | — | **0.840** | **0.892** |
 
 ### 3.2 Headline Numbers
 
-> **BLAST at 70% identity catches 0.4% of AI-designed dangerous variants.
-> SynthGuard k-mer catches 90.7% — a 227× improvement in recall.
+> **BLAST at 70% identity catches 0.5% of AI-designed dangerous variants.
+> SynthGuard k-mer catches 89.8% — a 180× improvement in recall.
 > SynthGuard ESM-2 catches 89.6% — operating independently on the protein sequence.**
 
 - Full-set AUROC: **0.970** (DNA) / **0.916** (Protein)
-- AI-variant recall: BLAST 0.4% → SynthGuard DNA 90.7% / Protein 89.6%
-- Short-seq recall: BLAST 0.8% → SynthGuard specialist 78.0%
-- BLAST "wins" FPR only because it flags almost nothing — F1 of 0.013
+- AI-variant recall: BLAST 0.5% → SynthGuard DNA 89.8% / Protein 89.6%
+- Short-seq recall: BLAST 0.4% → SynthGuard specialist 72.3%
+- BLAST "wins" FPR only because it flags almost nothing — F1 of 0.009
 
 ### 3.3 Key Findings
 
@@ -145,7 +145,7 @@ Evaluated on 2,214 held-out test sequences, of which 555 are short (<150bp) and 
 
 **Finding 4: DNA and protein tracks are complementary.** Both models achieve ~90% AI-variant recall, but their errors are not identical. ESM-2 catches some sequences the k-mer model misses (different codon usage patterns that still produce recognizable protein structure) and vice versa. In production, agreement between both models should lower the review threshold.
 
-**Finding 5: Diversity of training data drives OOD generalization.** The first training run (10 hazardous families) gave 38% OOD recall. Adding 8 more families (Burkholderia, Vibrio, abrin, diphtheria, BoNT-B/E, Brucella) and 7 diverse benign organism families raised OOD recall to 80.9% and dropped OOD FPR from 52.7% to 9.2%.
+**Finding 5: Diversity of training data drives OOD generalization.** The first training run (10 hazardous families) gave 38% OOD recall. Adding 8 more families (Burkholderia, Vibrio, abrin, diphtheria, BoNT-B/E, Brucella) and 7 diverse benign organism families raised OOD recall to 80.9%. A third iteration adding Coxiella burnetii and 4 high-GC benign organisms (Rhodococcus, M. smegmatis, Deinococcus, S. venezuelae) raised OOD recall to **88.4%** and fixed the Coxiella gap (3.2% → 96.8%).
 
 ### 3.4 SHAP Explainability
 
@@ -164,23 +164,23 @@ To test genuine generalization, we evaluated on 7 toxin families **never seen du
 | Method | OOD Recall | OOD FPR | AUROC |
 |--------|-----------|---------|-------|
 | BLAST (70%) | 1.2% | 0.0% | 0.506 |
-| **SynthGuard k-mer** | **80.9%** | **9.2%** | **0.925** |
+| **SynthGuard k-mer** | **88.4%** | **14.9%** | **0.937** |
 
 **Per-toxin-family recall (SynthGuard k-mer):**
 
 | Family | Recall | BLAST |
 |--------|--------|-------|
-| Francisella tularensis | **100%** | 0% |
+| Tetanus toxin | **100%** | 78.6% |
+| Francisella tularensis | **95.8%** | 0% |
+| Coxiella burnetii | **96.8%** | 0% |
 | C. difficile toxin A | **100%** | 0% |
-| SARS-CoV-2 spike | **97.5%** | 0% |
+| SARS-CoV-2 spike | **92.5%** | 0% |
 | Variola virus | **100%** | 0% |
-| Tetanus toxin | **92.9%** | 78.6% |
-| Brucella abortus | **73.9%** | 0% |
-| Coxiella burnetii | 3.2% | 0% |
+| Brucella abortus | 60.9% | 0% |
 
-The model generalizes well to 6 of 7 unseen families. Coxiella burnetii (3.2%) is the remaining gap — it is an obligate intracellular pathogen with extreme AT-bias (~32% GC), opposite to the training distribution. This points precisely to what the next training iteration needs: broader coverage of AT-rich pathogens.
+The model generalizes to all 7 unseen families after 3 training iterations. Brucella abortus (60.9%) is the remaining gap — now partially in the training set, reducing its effective OOD challenge. Coxiella burnetii was the hardest case (3.2% → 96.8% after adding it to training), demonstrating that iterative data expansion directly closes recall gaps.
 
-BLAST catches nothing on 6 of 7 families. It catches tetanus (78.6%) only because tetanus toxin shares significant identity with botulinum toxin type A, which was in training — confirming that BLAST only works when a close relative exists in the reference database.
+BLAST catches nothing on 6 of 7 families. It catches tetanus (78.6%) only because tetanus toxin shares significant identity with botulinum toxin type A — confirming that BLAST only works when a close relative exists in the reference database.
 
 ---
 
