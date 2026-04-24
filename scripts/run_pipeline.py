@@ -247,7 +247,7 @@ def main():
 
     # ── ESM-2 (optional) ──────────────────────────────────────────────────────
     if not args.skip_protein:
-        print("\n[funcscreen ESM-2 650M — ~5 min]")
+        print("\n[funcscreen ESM-2 650M]")
         AA = {"TTT":"F","TTC":"F","TTA":"L","TTG":"L","CTT":"L","CTC":"L","CTA":"L","CTG":"L",
               "ATT":"I","ATC":"I","ATA":"I","ATG":"M","GTT":"V","GTC":"V","GTA":"V","GTG":"V",
               "GCT":"A","GCC":"A","GCA":"A","GCG":"A","TAT":"Y","TAC":"Y","CAT":"H","CAC":"H",
@@ -258,11 +258,19 @@ def main():
         def translate(dna):
             return "".join(AA.get(dna[i:i+3], "X") for i in range(0, len(dna)-2, 3))
 
-        prot_seqs, prot_lbls = [], []
-        for seq, lbl in zip(seqs[:200], labels[:200]):
+        # Use all translatable sequences (divisible by 3, no stop codons, min 15aa)
+        prot_seqs, prot_lbls, prot_src = [], [], []
+        for seq, lbl, src in zip(seqs, labels, sources):
+            if len(seq) % 3 != 0:
+                continue
             aa = translate(seq.upper())
-            if len(aa) > 15 and "*" not in aa:
-                prot_seqs.append(aa); prot_lbls.append(lbl)
+            if len(aa) >= 15 and "*" not in aa and "X" not in aa:
+                prot_seqs.append(aa)
+                prot_lbls.append(lbl)
+                prot_src.append(src)
+
+        print(f"  Translatable sequences: {len(prot_seqs)} "
+              f"({sum(prot_lbls)} hazardous / {len(prot_lbls)-sum(prot_lbls)} benign)")
 
         tok_p = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
         base_p = AutoModelForSequenceClassification.from_pretrained(
@@ -275,9 +283,27 @@ def main():
                           map_location="cpu")
         model_p.load_state_dict(sd_p, strict=False)
         model_p = model_p.to(DEVICE).eval()
+        print(f"  Running inference on {len(prot_seqs)} protein sequences...")
         prot_pr = screen_batch(prot_seqs, model_p, tok_p, batch=8)
-        ALL["esm2_full"] = show("funcscreen ESM-2 — Protein",
-            metrics(prot_lbls, (prot_pr>=0.5).astype(int), prot_pr))
+        prot_pred = (prot_pr >= 0.5).astype(int)
+
+        ALL["esm2_full"] = show("funcscreen ESM-2 — Full", metrics(prot_lbls, prot_pred, prot_pr))
+
+        # Short protein slice
+        short_prot = [i for i, s in enumerate(prot_seqs) if len(s) < 50]
+        if short_prot and len(set(np.array(prot_lbls)[short_prot])) > 1:
+            ALL["esm2_short"] = show("funcscreen ESM-2 — Short (<50aa)",
+                metrics([prot_lbls[i] for i in short_prot],
+                        prot_pred[short_prot], prot_pr[short_prot]))
+
+        # AI-variant protein slice
+        ai_prot = [i for i, s in enumerate(prot_src)
+                   if any(t in s for t in ["codon","shuffled","variant","fragment"])]
+        if ai_prot and len(set(np.array(prot_lbls)[ai_prot])) > 1:
+            ALL["esm2_ai"] = show("funcscreen ESM-2 — AI Variants",
+                metrics([prot_lbls[i] for i in ai_prot],
+                        prot_pred[ai_prot], prot_pr[ai_prot]))
+
         del model_p; torch.cuda.empty_cache()
 
     # ── k-mer LightGBM ────────────────────────────────────────────────────────
@@ -359,13 +385,15 @@ def main():
         ("blast_full",           "BLAST (70%) — Full"),
         ("dna_full",             "funcscreen DNABERT-2 — Full"),
         ("kmer_full",            "SynthGuard k-mer — Full"),
+        ("esm2_full",            "funcscreen ESM-2 — Full (protein)"),
         ("blast_short",          "BLAST — Short (<150bp)"),
         ("dna_short",            "funcscreen DNABERT-2 — Short"),
         ("kmer_short_specialist","SynthGuard Short-Seq Specialist"),
+        ("esm2_short",           "funcscreen ESM-2 — Short (<50aa)"),
         ("blast_ai",             "BLAST — AI Variants"),
         ("dna_ai",               "funcscreen DNABERT-2 — AI Variants"),
         ("kmer_ai",              "SynthGuard k-mer — AI Variants"),
-        ("esm2_full",            "funcscreen ESM-2 (protein)"),
+        ("esm2_ai",              "funcscreen ESM-2 — AI Variants (protein)"),
     ]
     for key, label in rows:
         m = ALL.get(key)

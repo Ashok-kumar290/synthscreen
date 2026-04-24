@@ -47,10 +47,14 @@ HAZARDOUS_QUERIES = [
     '"botulinum toxin" AND "type B"[All Fields] AND 1000:5000[SLEN]',
     '"botulinum toxin" AND "type E"[All Fields] AND 1000:5000[SLEN]',
     '"Clostridium botulinum"[Organism] AND "neurotoxin" AND 500:4000[SLEN]',
+    # Added: fix Brucella 30% recall — add to training
+    '"Brucella abortus"[Organism] AND "virulence" AND 300:3000[SLEN]',
+    '"Brucella melitensis"[Organism] AND "virulence" AND 300:3000[SLEN]',
 ]
 
 # Publicly safe, benign sequences
 BENIGN_QUERIES = [
+    # Standard lab organisms
     '"Escherichia coli K-12"[Organism] AND "lacZ"',
     '"pUC19" AND "cloning vector"',
     '"enhanced green fluorescent protein" AND "EGFP"',
@@ -61,6 +65,15 @@ BENIGN_QUERIES = [
     '"Mus musculus"[Organism] AND "beta actin" AND "mRNA"',
     '"synthetic construct"[Organism] AND "expression vector" AND 1000:5000[SLEN]',
     '"Lactobacillus acidophilus"[Organism] AND "16S ribosomal RNA"',
+    # Added: diverse codon usage organisms — fix OOD FPR 52.7%
+    # These have unusual GC/codon bias that the model incorrectly flagged as hazardous
+    '"Streptomyces coelicolor"[Organism] AND 500:3000[SLEN]',
+    '"Pichia pastoris"[Organism] AND "expression" AND 300:2000[SLEN]',
+    '"Neurospora crassa"[Organism] AND 300:2000[SLEN]',
+    '"Danio rerio"[Organism] AND "housekeeping" AND "mRNA" AND 300:2000[SLEN]',
+    '"Aspergillus niger"[Organism] AND "enzyme" AND 300:3000[SLEN]',
+    '"Trichoderma reesei"[Organism] AND "cellulase" AND 300:3000[SLEN]',
+    '"Chlamydomonas reinhardtii"[Organism] AND 300:2000[SLEN]',
 ]
 
 # Standard genetic code: codon -> list of synonymous codons
