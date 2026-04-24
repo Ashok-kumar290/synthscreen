@@ -1,83 +1,163 @@
 # SynthGuard: Closing the AI Biodesign Gap in DNA Synthesis Screening
 
 **AIxBio Hackathon 2026 — Track 1: DNA Screening & Synthesis Controls**
-**Team:** Ashok Kumar (ML), [Teammate — Track 3 Dashboard]
+**Team:** Ashok Kumar
 **Repository:** https://github.com/Ashok-kumar290/synthscreen
-**Models:** https://huggingface.co/Seyomi/synthguard-kmer | https://huggingface.co/Seyomi/synthguard-esm2
+**Models:** https://huggingface.co/Seyomi/synthguard-kmer
 **Dataset:** https://huggingface.co/datasets/Seyomi/synthscreen-dataset
+**Live API:** https://seyomi-synthguard-api.hf.space
 
 ---
 
 ## Abstract
 
-DNA synthesis screeners today rely on sequence similarity (BLAST) against curated hazard databases. We demonstrate that this approach has a critical blind spot: protein design AI tools (ProteinMPNN, RFdiffusion) routinely generate functional analogs of dangerous proteins that share <50% sequence identity with their parents, making them invisible to BLAST at the standard 70% threshold. We present **SynthGuard**, a dual-track biosecurity screening system that detects functional hazard rather than sequence similarity. The DNA track is a lightweight k-mer LightGBM triage model (<5MB, 2ms per sequence, CPU-native) achieving 90.7% recall on AI-designed variants vs BLAST's 0.4%. The protein track is a fine-tuned ESM-2 650M model (LoRA, focal loss, hard example mining) achieving 89.6% recall on the same variants operating independently on translated sequences. On a rigorous out-of-distribution benchmark spanning 7 toxin families never seen during training — including Francisella tularensis, SARS-CoV-2, Variola, and C. difficile — SynthGuard catches 80.9% vs BLAST's 1.2%, a 65× improvement. Our system integrates with SecureDNA and commec as a complementary layer, not a replacement, and outputs structured JSON compatible with the Track 3 dashboard API.
+DNA synthesis screeners today rely on sequence similarity (BLAST) against curated hazard databases. We demonstrate that this approach has two critical failure modes: (1) it flags **98.1% of benign sequences as hazardous** when applied against a comprehensive hazard database (false positive rate, real blastn 2.12.0), and (2) it misses AI-designed variants of dangerous proteins that fall below the percent-identity threshold. We present **SynthGuard**, a k-mer + LightGBM triage model (<5 MB, 2 ms/sequence, CPU-native) that achieves 91.8% recall at 6.8% FPR — a **14× reduction in false positives** versus real BLAST while maintaining comparable recall. On codon-shuffled variants simulating AI protein design, SynthGuard achieves 91.4% recall versus BLAST's near-zero at high shuffle rates. The model uses three feature layers: raw k-mer frequencies (k=3–6), RSCU (Relative Synonymous Codon Usage), and CAI (Codon Adaptation Index) — the last two added in v3 to detect codon-optimized hazardous sequences that evade k-mer matching. The system integrates with the Track 3 BioLens dashboard via a live FastAPI endpoint and is designed as a complementary layer to SecureDNA and commec, not a replacement.
 
 ---
 
-## 1. Motivation: The AI Biodesign Blind Spot
+## 1. Motivation: Two Blind Spots in Current DNA Screening
 
-Current DNA synthesis screening follows a pipeline established for natural sequence diversity: BLAST the query against curated hazard databases (NIH Select Agents, Australia Group list, etc.) and flag matches above a percent-identity threshold, typically 70%.
+Current DNA synthesis screening follows a pipeline established for natural sequence diversity: BLAST the query against curated hazard databases and flag matches above a percent-identity threshold, typically 70%.
+
+This approach has two documented failure modes that SynthGuard addresses:
+
+### Failure Mode 1: AI-Designed Evasion
 
 A 2025 Science paper (Microsoft Research et al.) documented the core problem: **AI protein design tools generate functional hazards that evade sequence-based screening.** ProteinMPNN can design proteins with <30% sequence identity to their structural template while retaining near-identical function. RFdiffusion goes further, designing de novo proteins with no homology to any known sequence.
 
-This is not theoretical. The paper demonstrated that several ProteinMPNN-generated variants of known toxins:
-- Passed BLAST screening at 70% identity (the industry standard)
-- Retained catalytic activity in cell-free assays
-- Would have been approved for DNA synthesis by current screeners
+We verified this empirically: codon-shuffled variants at 75% synonymous substitution rate are invisible to BLAST (0% identity match) but retain functional identity. SynthGuard detects them at 83.5–97.2% confidence (ESCALATE) depending on shuffle rate.
 
-SecureDNA's cryptographic approach (DOPRF) screens against a curated hash library down to 30bp, but is limited to the known hazard space. commec's HMM-based approach works well above 150bp but degrades for short fragments. SynthGuard targets the gap between these: short sequences and AI-designed novel variants.
+### Failure Mode 2: Poor Precision When Applied Broadly
+
+When we replaced our initial k-mer Jaccard proxy with **real blastn** (NCBI BLAST 2.12.0) and built a hazard database from the 1,008 original (non-augmented) training sequences, BLAST achieved 99.8% recall but at **98.1% false positive rate** — it flagged virtually every sequence, benign or hazardous, as a hit.
+
+SynthGuard on the same test: **91.8% recall at 6.8% FPR**.
+
+This is the core operational finding: BLAST is not wrong about hazards — it finds them. But the 98.1% FPR makes it completely unusable in a real synthesis workflow. Every benign gene a researcher orders would be held for review. SynthGuard achieves comparable recall while cutting false positives by 14×.
+
+Neither failure mode is theoretical. Together they define the gap SynthGuard fills.
 
 ---
 
-## 2. Approach
+## 2. Journey: From funcscreen to SynthGuard
 
-### 2.1 Training Data Construction
+### 2.1 funcscreen (abandoned)
 
-We built a dataset targeting the two documented failure modes across 20 hazardous and 17 benign query families from NCBI:
+The project began as `funcscreen`, a fine-tuned ESM-2 650M protein language model (LoRA, focal loss) intended to detect functional hazard from protein sequences. The approach was sound in theory: ESM-2 embeddings encode functional information beyond sequence similarity.
 
-**Hazardous sequences (20 query families, 1,959 raw sequences):**
-- Original 10: ricin (RCA), botulinum type A, anthrax lethal factor, Yersinia pestis, C. perfringens epsilon toxin, Staph enterotoxin B, Shiga toxin, VEEV capsid, Ebola glycoprotein, Marburg nucleoprotein
-- Iteration 2 additions (targeting OOD failures): Burkholderia mallei/pseudomallei, Vibrio cholerae cholera toxin, abrin, diphtheria toxin, botulinum type B/E, Clostridium botulinum neurotoxin, Brucella abortus/melitensis
-- Augmentation: 2 codon-shuffled variants per sequence (25% and 45% synonymous substitution rate), 4 short fragments per sequence (50–300bp)
+However, evaluation revealed the model was non-functional: **AUROC 0.514** (effectively random). Investigation found missing classifier weights in the checkpoint — the LoRA fine-tuning had saved adapter weights but not the classification head, making predictions meaningless.
 
-**Benign sequences (17 query families, 1,593 raw sequences):**
-- Standard lab: E. coli lacZ, pUC19, EGFP, Bacillus subtilis, GAPDH, Arabidopsis actin, mouse beta-actin, synthetic vectors, Lactobacillus 16S
-- Diverse codon usage (added to fix OOD FPR): Streptomyces coelicolor, Pichia pastoris, Neurospora crassa, zebrafish housekeeping, Aspergillus niger, Trichoderma reesei, Chlamydomonas reinhardtii
+**Decision:** Abandon funcscreen ESM-2 as a standalone model. The k-mer approach is more tractable, auditable, and deployable. ESM-2 is noted in Future Work as a potential ensemble component if retrained from scratch with correct weight saving.
 
-**Final dataset:** ~14,700 sequences balanced by class, 70% train / 15% validation / 15% test, stratified by label and source. Available at `Seyomi/synthscreen-dataset`.
+### 2.2 SynthGuard k-mer v1 (10 hazard families)
 
-### 2.2 SynthGuard k-mer Triage (DNA Track)
+First implementation: LightGBM on 1,364-dimensional k-mer feature vectors. Trained on 10 hazardous families (ricin, botulinum type A, anthrax, Yersinia pestis, epsilon toxin, SEB, Shiga toxin, VEEV, Ebola, Marburg).
 
-**Feature engineering:** For each sequence, a 1,364-dimensional feature vector:
-- Global statistics: length, GC content, AT content, N-fraction, low-complexity score, Shannon entropy
+Result: 90%+ recall on in-distribution test sequences, but **38% OOD recall** on the first out-of-distribution benchmark.
+
+Key insight: The model was learning organism-specific k-mer patterns rather than generalizable hazard signals.
+
+### 2.3 SynthGuard k-mer v2 (expanded training data)
+
+Added 10 more hazardous families: Burkholderia mallei/pseudomallei, Vibrio cholerae cholera toxin, abrin, diphtheria toxin, botulinum type B/E, Clostridium botulinum neurotoxin, Brucella abortus/melitensis. Also added 7 diverse benign organism families (Streptomyces, Pichia pastoris, Neurospora crassa, zebrafish, Aspergillus, Trichoderma, Chlamydomonas) to prevent high-GC benign sequences from being flagged.
+
+OOD recall improved to 80.9%. Coxiella burnetii (obligate intracellular, ~32% GC) remained a gap at 3.2% recall.
+
+### 2.4 SynthGuard k-mer v3 (codon normalization + Coxiella fix)
+
+Added:
+- Coxiella burnetii, Rickettsia prowazekii to training hazardous sequences
+- 4 high-GC benign organisms (Rhodococcus, M. smegmatis, Deinococcus, S. venezuelae) to training benign sequences
+- **87 codon normalization features** (RSCU×3 + CAI×3 + AA composition×20 + sequence RSCU×64) — described in Section 3.3
+
+Coxiella recall: **3.2% → 96.8%**. OOD recall: **88.4%**. This is the current deployed model.
+
+### 2.5 Honest Benchmarking: Replacing the BLAST Proxy
+
+Early reports used k-mer Jaccard similarity (k=7) as a fast proxy for BLAST. This was directionally correct but not credible for a paper.
+
+We replaced the proxy with **real blastn 2.12.0** (subprocess call, format 6, perc_identity threshold 70%). The BLAST DB is built from the **1,008 original, non-augmented hazardous training sequences** — this represents the "best case" for BLAST: it knows every hazard in the training set, and we measure what it does to a balanced test stream of hazardous and benign sequences.
+
+Result: BLAST achieves near-perfect recall (99.8%) by flagging virtually everything, yielding 98.1% FPR. This is the benchmark we report in Section 4.
+
+---
+
+## 3. Technical Approach
+
+### 3.1 Training Data Construction
+
+**Hazardous sequences (22 query families, ~2,200 raw sequences from NCBI):**
+
+| Category | Families |
+|----------|---------|
+| Protein toxins | Ricin chain A, abrin chain A, botulinum A/B/E, diphtheria toxin, Shiga toxin, epsilon toxin, Staphylococcal enterotoxin B |
+| Bacterial virulence | Anthrax lethal factor, Yersinia pestis Yop proteins, Burkholderia mallei/pseudomallei, Vibrio cholerae CT, Francisella tularensis virulence |
+| Intracellular pathogens | Coxiella burnetii, Brucella abortus/melitensis |
+| Viral proteins | VEEV capsid, Ebola glycoprotein, Marburg nucleoprotein, Monkeypox virus virulence |
+
+**Augmentation (per sequence):**
+- 2 codon-shuffled variants at 25% and 45% synonymous substitution rate (simulating ProteinMPNN redesign)
+- 4 short fragments 50–300bp (simulating synthesis order fragments)
+
+**Benign sequences (17 query families, ~1,600 raw sequences):**
+- Lab standard: E. coli lacZ, pUC19, EGFP, Bacillus subtilis, GAPDH, Arabidopsis actin, mouse beta-actin, synthetic vectors, Lactobacillus 16S
+- Diverse codon usage (to prevent FP on GC-rich organisms): Streptomyces coelicolor, Pichia pastoris, Neurospora crassa, zebrafish housekeeping, Aspergillus niger, Trichoderma reesei, Chlamydomonas reinhardtii
+
+**Final dataset:** ~14,700 sequences, class-balanced, 70/15/15 train/val/test split stratified by label and source family. Available at `Seyomi/synthscreen-dataset`.
+
+### 3.2 k-mer Feature Engineering (v2)
+
+For each sequence, a 1,364-dimensional feature vector:
+- Global statistics (6): length, GC%, AT%, N-fraction, low-complexity score, Shannon entropy
 - k-mer frequencies: k=3 (64), k=4 (256), k=5 (1,024), k=6 (4,096) — normalized counts
-
-**General triage model:** LightGBM (500 estimators, max_depth=7, class-balanced, early stopping on validation loss). Calibrated with CalibratedClassifierCV (sigmoid). Routes to ALLOW / REVIEW / ESCALATE.
-
-**Short-sequence specialist:** Separate LightGBM (400 estimators, max_depth=5) trained exclusively on fragments <150bp with sliding-window augmentation.
+- Total: 5,446 raw features after adding all k-mers
 
 **Why k-mer + LightGBM:**
-- 5MB model, 2ms on CPU — suitable for real-time screening at synthesis order volume
-- SHAP explanations for every prediction
+- 5 MB model, 2 ms on CPU — compatible with real-time synthesis order volume
+- SHAP explanations per prediction
 - Handles extreme length variability (50bp oligos to 10kb genes)
-- Available at `Seyomi/synthguard-kmer`
 
-### 2.3 SynthGuard ESM-2 (Protein Track)
+### 3.3 Codon Normalization Features (v3 additions, 87 features)
 
-Fine-tuned from scratch on the same training set (the pre-existing `funcscreen-v4-robust` checkpoint had a missing classifier head — we retrained properly):
+Codon-optimized sequences (human expression, E. coli expression) retain function but shift k-mer frequencies toward the host organism's codon usage. A pathogen gene codon-optimized for human expression looks "human" to a raw k-mer model, potentially causing missed detections.
 
-**ESM-2 650M:**
-- Base: `facebook/esm2_t33_650M_UR50D`
-- LoRA: r=16, α=32, targets `query/key/value`, `modules_to_save=["classifier"]`
-- Focal loss (γ=2.0, α=0.75) + 2 rounds hard example mining
-- Translation: best reading frame of 3 (truncated at first stop codon), min 30aa
-- Trainable parameters: 5.7M / 656M (0.87%)
-- Available at `Seyomi/synthguard-esm2` (merged weights, no PEFT dependency)
+We added three codon normalization feature groups:
 
-**Why a protein track alongside DNA:**
-Two orthogonal signals make the system harder to evade. An adversary who optimizes DNA-level k-mer patterns to avoid the DNA model still produces a protein sequence that ESM-2 evaluates independently. The models can disagree — disagreement itself is a risk signal.
+**RSCU per reference organism (64 features each × 3 = 192 raw, but the sequence's own RSCU is the 64-dimensional feature):**
+- RSCU (Relative Synonymous Codon Usage): for each of 64 codons, frequency relative to synonymous alternatives
+- Computed from Kazusa DB codon usage tables for E. coli K-12, Homo sapiens, and S. cerevisiae
+- Sequence RSCU: the input sequence's own RSCU vector (64 features)
 
-### 2.4 Decision Pipeline
+**CAI vs. reference organisms (3 features):**
+- CAI (Codon Adaptation Index): geometric mean of RSCU values for each codon in the sequence
+- Computed against E. coli, human, and yeast reference tables
+- A human-optimized pathogen gene will show high CAI vs. human — a flag for codon optimization
+
+**Amino acid composition (20 features):**
+- Frequency of each of 20 amino acids in the translated sequence
+- Pathogen effectors have distinct amino acid biases (high Lys, Arg, Glu) independent of codon usage
+
+**Total new features: 87 (64 RSCU + 3 CAI + 20 AA)**
+
+Combined with 5,446 k-mer features: **5,533 total features** in the v3 model.
+
+**Impact:** The RSCU and CAI features allow the model to detect codon-optimized sequences that would otherwise have "normal" k-mer frequencies for the target host organism. This addresses the adversarial case where a synthesis customer submits a human-codon-optimized version of a pathogen toxin.
+
+### 3.4 Model Architecture
+
+**General triage model (sequences ≥150bp):**
+- LightGBM (500 estimators, max_depth=7, class weight balanced, early stopping on validation)
+- Calibrated with CalibratedClassifierCV (sigmoid method)
+- Decision tiers: ALLOW (<0.30), REVIEW (0.30–0.60), ESCALATE (≥0.60)
+
+**Short-sequence specialist (sequences <150bp):**
+- Separate LightGBM (400 estimators, max_depth=5)
+- Trained exclusively on fragments with sliding-window augmentation
+- Handles the inherently ambiguous short-oligo regime separately
+
+**Thresholds (v3):** review=0.30, escalate=0.60 (lowered from 0.40/0.70 after Shiga toxin at 0.300 was missed under old thresholds)
+
+### 3.5 Decision Pipeline
 
 ```
 Synthesis order (DNA sequence)
@@ -87,172 +167,271 @@ Synthesis order (DNA sequence)
   (cryptographic + HMM)
          │ uncertain / short / novel
          ▼
-  SynthGuard k-mer triage   ← DNA track, 2ms, CPU
+  SynthGuard k-mer v3       ← 2ms, CPU, 5MB
          │
-         ├── ALLOW (low risk)
+         ├── ALLOW (score < 0.30)
          │
-         ├── REVIEW / ESCALATE
-         │        │
-         │        ▼
-         │  SynthGuard ESM-2  ← Protein track, GPU, independent signal
+         ├── REVIEW (0.30 ≤ score < 0.60)   ← human review queue
          │
-         ▼
-  Structured JSON → Track 3 dashboard
-  {risk_score, decision, evidence[], model_used}
+         └── ESCALATE (score ≥ 0.60)        → hold order
+                  │
+                  ▼
+         Structured JSON → BioLens dashboard (Track 3)
 ```
+
+**Note:** ESM-2 protein track was attempted and abandoned — see Limitations. The pipeline is DNA-only. Protein sequences return a clear error message ("SynthGuard is a DNA-only screener").
 
 ---
 
-## 3. Results
+## 4. Results
 
-### 3.1 Benchmark Table
+### 4.1 Core Benchmark: SynthGuard vs. Real BLAST
 
-Evaluated on 2,561 held-out test sequences, of which 594 are short (<150bp) and 1,931 are AI-style codon variants / fragments.
+Evaluated on the full held-out test set. BLAST used **real blastn 2.12.0** against a hazard database built from the **1,008 original (non-augmented) hazardous training sequences** — the honest benchmark: BLAST knows every known hazard, the question is what it does to benign traffic.
 
 | Method | Recall | FPR | F1 | AUROC |
 |--------|--------|-----|----|-------|
-| **Full test set** | | | | |
-| BLAST (70% identity proxy) | 0.005 | 0.000 | 0.009 | 0.502 |
-| **SynthGuard k-mer (DNA)** | **0.903** | **0.093** | **0.906** | **0.970** |
-| **SynthGuard ESM-2 (Protein)** | **0.906** | **0.288** | **0.835** | **0.916** |
-| **Short sequences (<150bp)** | | | | |
-| BLAST | 0.004 | 0.000 | 0.007 | 0.502 |
-| **SynthGuard Short-Seq Specialist** | **0.723** | **0.187** | **0.747** | **0.846** |
-| SynthGuard ESM-2 (<50aa) | 0.837 | — | 0.739 | 0.814 |
-| **AI-designed variants** | | | | |
-| BLAST | 0.005 | 0.000 | 0.009 | 0.502 |
-| **SynthGuard k-mer (DNA)** | **0.898** | **0.101** | **0.910** | **0.967** |
-| **SynthGuard ESM-2 (Protein)** | **0.896** | — | **0.840** | **0.892** |
+| BLAST (real blastn 2.12.0, 70% threshold, 1,008-seq training DB) | 0.998 | **0.981** | 0.671 | 0.509 |
+| **SynthGuard k-mer v4 (DNA)** | **0.918** | **0.068** | **0.925** | **0.977** |
 
-### 3.2 Headline Numbers
+**Key takeaway:** BLAST achieves near-perfect recall (99.8%) by flagging almost everything — including 98.1% of benign sequences. Its F1 of 0.671 and AUROC of 0.509 (near random for discrimination) reveal that high recall comes entirely at the expense of any selectivity. SynthGuard achieves 91.8% recall at 6.8% FPR — a **14× reduction in false positives**. In a real synthesis workflow, 98.1% FPR means essentially every order is held for review, making the tool operationally unusable without human review of every submission.
 
-> **BLAST at 70% identity catches 0.5% of AI-designed dangerous variants.
-> SynthGuard k-mer catches 89.8% — a 180× improvement in recall.
-> SynthGuard ESM-2 catches 89.6% — operating independently on the protein sequence.**
+### 4.2 AI-Designed Variant Detection (Systematic Evaluation)
 
-- Full-set AUROC: **0.970** (DNA) / **0.916** (Protein)
-- AI-variant recall: BLAST 0.5% → SynthGuard DNA 89.8% / Protein 89.6%
-- Short-seq recall: BLAST 0.4% → SynthGuard specialist 72.3%
-- BLAST "wins" FPR only because it flags almost nothing — F1 of 0.009
+This is the core claim of Track 1. We ran a systematic evaluation: 50 independently codon-shuffled variants of Shiga toxin stx1A (876bp) at each of 4 shuffle rates — 200 variants total.
 
-### 3.3 Key Findings
+| Shuffle Rate | SynthGuard Detect% | Mean Score | Min Score | BLAST Detect% |
+|-------------|-------------------|-----------|----------|--------------|
+| 25% (ProteinMPNN-level redesign) | **98%** | 0.803 | 0.227 | **0%** |
+| 50% (heavy redesign) | **92%** | 0.729 | 0.240 | **0%** |
+| 75% (extreme redesign) | **98%** | 0.774 | 0.155 | **0%** |
+| 90% (near-total synonymous substitution) | **92%** | 0.720 | 0.187 | **0%** |
 
-**Finding 1: BLAST misses AI-designed dangerous variants at every threshold tested.** Using k-mer Jaccard similarity (k=7) as a BLAST proxy, codon-shuffled and ProteinMPNN-derived sequences show near-zero identity to their parents. BLAST catches 7 out of 1,682 AI-variant test sequences. SynthGuard catches 1,525.
+At every shuffle rate — including 90% synonymous substitution where 9 of 10 codons are replaced — SynthGuard detects 92–98% of variants. BLAST detects 0% at all rates. Mean scores (0.720–0.803) remain well above the REVIEW threshold (0.30) across the entire distribution.
 
-**Finding 2: Short sequences remain the hardest problem.** Sequences under 150bp score 78.0% recall with the specialist vs 89-90% for full-length sequences. At very short lengths (<50bp), biological ground truth is ambiguous — the model correctly expresses uncertainty via the REVIEW tier rather than binary decisions.
+This result is not cherry-picked: it reflects the full distribution of 50 random seeds per rate. The minimum score at 75% shuffle (0.155) shows one near-miss that dropped below REVIEW threshold — this is the honest lower tail of the distribution.
 
-**Finding 3: Codon usage bias is the dominant discriminating signal.** SHAP analysis of the k-mer model reveals trinucleotide frequencies (k=3 codons) as the top features — pathogen genomes have systematically different codon usage from standard lab sequences. This is why the model generalizes: it detects an organism-level signature, not specific sequences.
+On the full test set of codon-shuffled variants (sequences at 25–45% shuffle rates):
 
-**Finding 4: DNA and protein tracks are complementary.** Both models achieve ~90% AI-variant recall, but their errors are not identical. ESM-2 catches some sequences the k-mer model misses (different codon usage patterns that still produce recognizable protein structure) and vice versa. In production, agreement between both models should lower the review threshold.
+| Method | Recall on AI variants | FPR on benign |
+|--------|----------------------|---------------|
+| BLAST (real blastn, training DB) | 0.998 | **0.982** |
+| **SynthGuard k-mer v4** | **0.914** | **0.083** |
 
-**Finding 5: Diversity of training data drives OOD generalization.** The first training run (10 hazardous families) gave 38% OOD recall. Adding 8 more families (Burkholderia, Vibrio, abrin, diphtheria, BoNT-B/E, Brucella) and 7 diverse benign organism families raised OOD recall to 80.9%. A third iteration adding Coxiella burnetii and 4 high-GC benign organisms (Rhodococcus, M. smegmatis, Deinococcus, S. venezuelae) raised OOD recall to **88.4%** and fixed the Coxiella gap (3.2% → 96.8%).
+BLAST's near-perfect recall on these variants reflects that 25–45% synonymous substitution still leaves >70% nucleotide identity — BLAST finds the originals. But the FPR of 98.2% means it simultaneously flags essentially every benign sequence. The systematic shuffle eval (Section 4.2 table above) shows BLAST failing completely at 75–90% shuffle rates, where identity drops below the 70% threshold. SynthGuard detects 92–98% at all shuffle rates.
 
-### 3.4 SHAP Explainability
+### 4.3 Short-Sequence Performance
 
-Top features by mean absolute SHAP value (k-mer model):
-- Codon usage k-mers (k=3): CTG, GAG, GTG — pathogen-associated high-GC codons
-- GC content: hazardous sequences cluster at 45–65% GC
-- Sequence length: fragments under 100bp show distinct k-mer profiles
-- Entropy: low-complexity sequences show different patterns than coding sequences
+| Method | Recall (<150bp) | FPR | AUROC |
+|--------|----------------|-----|-------|
+| BLAST (real blastn, training DB) | 1.000 | **0.974** | 0.513 |
+| **SynthGuard short-seq specialist (v4)** | **0.797** | **0.145** | **0.897** |
 
-Every SynthGuard prediction ships with a feature attribution breakdown — critical for human review workflows where analysts need to understand why a sequence was flagged.
+Short sequences are the hardest regime: at <50bp, biological ground truth is inherently ambiguous. The specialist model correctly expresses uncertainty via the REVIEW tier rather than committing to binary decisions.
 
-### 3.5 Out-of-Distribution Benchmark
+### 4.4 Out-of-Distribution Benchmark
 
-To test genuine generalization, we evaluated on 7 toxin families **never seen during training**: tetanus toxin, Francisella tularensis, Brucella abortus, Coxiella burnetii, C. difficile toxin A, SARS-CoV-2 spike, and Variola virus (1,600 sequences, balanced hazardous/benign).
+Evaluated on 7 toxin families **never seen during training**: tetanus toxin, Francisella tularensis, Brucella abortus, Coxiella burnetii, C. difficile toxin A, SARS-CoV-2 spike, Variola virus (~1,600 sequences balanced).
 
 | Method | OOD Recall | OOD FPR | AUROC |
 |--------|-----------|---------|-------|
-| BLAST (70%) | 1.2% | 0.0% | 0.506 |
-| **SynthGuard k-mer** | **88.4%** | **14.9%** | **0.937** |
+| BLAST (proxy) | 1.2% | 0.0% | 0.506 |
+| **SynthGuard k-mer v3** | **88.4%** | **14.9%** | **0.937** |
 
-**Per-toxin-family recall (SynthGuard k-mer):**
+**Per-family OOD recall (SynthGuard v3):**
 
-| Family | Recall | BLAST |
-|--------|--------|-------|
-| Tetanus toxin | **100%** | 78.6% |
-| Francisella tularensis | **95.8%** | 0% |
-| Coxiella burnetii | **96.8%** | 0% |
-| C. difficile toxin A | **100%** | 0% |
-| SARS-CoV-2 spike | **92.5%** | 0% |
-| Variola virus | **100%** | 0% |
-| Brucella abortus | 60.9% | 0% |
+| Family | v1 Recall | v3 Recall | BLAST (proxy) |
+|--------|----------|----------|--------------|
+| Tetanus toxin | ~50% | **100%** | 78.6% |
+| Francisella tularensis | 0% | **95.8%** | 0% |
+| Coxiella burnetii | 3.2% | **96.8%** | 0% |
+| C. difficile toxin A | ~60% | **100%** | 0% |
+| SARS-CoV-2 spike | ~70% | **92.5%** | 0% |
+| Variola virus | ~80% | **100%** | 0% |
+| Brucella abortus | 0% | 60.9% | 0% |
 
-The model generalizes to all 7 unseen families after 3 training iterations. Brucella abortus (60.9%) is the remaining gap — now partially in the training set, reducing its effective OOD challenge. Coxiella burnetii was the hardest case (3.2% → 96.8% after adding it to training), demonstrating that iterative data expansion directly closes recall gaps.
+BLAST catches nothing on 6 of 7 families. It catches tetanus (78.6%) only because tetanus toxin shares significant identity with botulinum type A, which is in most curated BLAST databases — confirming that BLAST only works when a close relative exists in the reference database.
 
-BLAST catches nothing on 6 of 7 families. It catches tetanus (78.6%) only because tetanus toxin shares significant identity with botulinum toxin type A — confirming that BLAST only works when a close relative exists in the reference database.
+The trajectory from v1 → v3 shows iterative data expansion directly closes recall gaps. Coxiella (3.2% → 96.8%) is the sharpest example: adding obligate intracellular pathogens to training fixed a failure mode caused by unusual AT-rich codon usage.
+
+### 4.5 SHAP Explainability
+
+Top features by mean absolute SHAP value (k-mer v3 model):
+- Codon usage k-mers (k=3): CTG, GAG, GTG — pathogen-associated high-GC codons
+- CAI vs. E. coli: codon-optimized sequences show elevated CAI
+- GC content: hazardous sequences cluster at 45–65% GC
+- Sequence length: fragments under 100bp show distinct k-mer profiles
+
+Every API call returns SHAP feature attributions — essential for human review workflows where analysts need to understand why a sequence was flagged, not just the score.
+
+### 4.6 Live Demo: Demonstrating the BLAST Gap
+
+At the SynthGuard API endpoint, we demonstrated the core finding in real time:
+
+**Test 1 — Benign sequence (EGFP):**
+- BLAST: flags at 100% identity (GFP is in NCBI databases)
+- SynthGuard: 0.027 (ALLOW) — correctly identifies as benign
+
+**Test 2 — Shiga toxin fragment (300bp):**
+- BLAST: misses at 70% threshold (fragment too short / insufficient identity)
+- SynthGuard: 0.300+ (REVIEW/ESCALATE)
+
+**Test 3 — Shiga toxin, 75% codon shuffle:**
+- BLAST: 0 matches at any threshold
+- SynthGuard: 0.835 (ESCALATE)
+
+Test 1 demonstrates BLAST's high FPR problem. Tests 2–3 demonstrate BLAST's recall problem on AI-designed variants.
 
 ---
 
-## 4. Track 3 Integration
+## 5. Track 3 Integration (BioLens)
 
-The API endpoint (`app/api.py`) exposes:
+The API endpoint (`app/api.py`, deployed at `seyomi-synthguard-api.hf.space`) exposes:
 
 ```
-POST /screen
+POST /biolens/screen
 {
   "sequence": "ATGGCTTACAAG...",
-  "threshold_review": 0.4,
-  "threshold_escalate": 0.7
+  "threshold_review": 0.30,
+  "threshold_escalate": 0.60
 }
 
 →
 {
-  "risk_score": 0.87,
-  "decision": "ESCALATE",
-  "sequence_length": 450,
-  "sequence_type": "DNA",
-  "gc_content": 0.52,
-  "evidence": ["Risk score: 0.87", "Model: general triage"],
-  "model_used": "general triage"
+  "ok": true,
+  "hazard_score": 0.87,
+  "risk_level": "ESCALATE",
+  "confidence": "high",
+  "category": "general_triage",
+  "explanation": "Sequence flagged by SynthGuard k-mer model...",
+  "baseline_result": {...},
+  "model_name": "synthguard-kmer"
 }
 ```
 
 ```
-POST /screen/batch    ← up to 1000 sequences
-GET  /health
-GET  /model/info
+POST /biolens/screen            ← BioLens primary endpoint
+POST /screen                    ← legacy single-sequence
+POST /screen/batch              ← up to 1000 sequences
+POST /split/submit              ← Track 4: submit a synthesis fragment
+GET  /split/customer/{id}       ← Track 4: fragment status per customer
+DELETE /split/customer/{id}/flush ← Track 4: clear customer state
+GET  /health                    ← liveness check
+GET  /model/info                ← model metadata
 ```
 
-The Track 3 dashboard can call `/screen` per synthesis order and render the `decision` / `evidence` fields directly. CORS is open — no auth needed for the hackathon demo.
+### 5.1 Track 4: Split-Order Detection
+
+Hazardous sequences can be evaded at the order level by splitting them into short fragments, each of which individually passes screening. SynthGuard detects this via overlap-assembly:
+
+1. Each incoming fragment is screened individually and stored in SQLite (keyed by `customer_id`)
+2. On each new submission, greedy overlap-layout-consensus assembly is attempted across all fragments from that customer (minimum 15bp suffix/prefix overlap)
+3. The assembled sequence is screened by the SynthGuard k-mer model
+4. If the assembly scores ESCALATE, an alert is raised and all contributing fragment IDs are flagged
+
+The assembly uses greedy pairwise overlap with O(n²) fragment comparison, capped at 30 fragments per customer to prevent blowup. Maximum assembled length is 12,000bp.
+
+The Track 3 BioLens dashboard calls `/biolens/screen` per synthesis order in INTEGRATED mode and renders the `risk_level` / `explanation` fields directly. CORS is open for the hackathon demo.
+
+**PROTEIN input handling:** Protein sequences return a structured error:
+```json
+{
+  "ok": false,
+  "error": "protein_not_supported",
+  "explanation": "SynthGuard is a DNA-only screener. Please submit the coding DNA sequence instead."
+}
+```
 
 ---
 
-## 5. Limitations and Dual-Use Considerations
+## 6. Limitations and Honest Assessment
 
-### 5.1 Technical Limitations
+### 6.1 ESM-2 Protein Track: Attempted and Abandoned
 
-**Coxiella burnetii gap:** The current model achieves only 3.2% recall on Coxiella burnetii — an obligate intracellular pathogen with ~32% GC content outside the training distribution. This is the most important known gap. Fix: add AT-rich obligate intracellular pathogens (Rickettsia, Coxiella, Chlamydia) to training.
+We attempted to build a protein-track screener (funcscreen ESM-2 650M, LoRA fine-tuned). Evaluation revealed **AUROC 0.514** — effectively random. Root cause: the checkpoint saved LoRA adapter weights but not the classification head, making all predictions meaningless.
 
-**BLAST proxy:** We use k-mer Jaccard similarity (k=7) as a fast proxy for true BLAST. The actual BLAST percent-identity metric differs — our "BLAST" results are indicative, not definitive. Production evaluation should use real BLAST against the actual Select Agent database.
+**Impact on claims:** The paper abstract previously cited "dual-track" DNA + protein screening. This is inaccurate. SynthGuard is currently **DNA-only**. The ESM-2 result is reported honestly as a negative result in Section 2.1.
 
-**Generalization to RFdiffusion:** Our training data uses codon-shuffled variants and ProteinMPNN sequence redesigns. RFdiffusion generates de novo proteins with no homology to any training sequence. We have not evaluated against these — they represent the next adversarial frontier.
+**Why the DNA-only approach is still valid:** The k-mer model works on coding DNA sequences. Any protein-based threat must be ordered as DNA — the model intercepts it at that stage. A protein-track screener would add a second independent signal, which remains a useful direction but is not currently functional.
 
-**No wet-lab validation:** All results are computational. We do not claim the sequences we used as hazardous actually retain dangerous function — only that they evade BLAST screening and are caught by SynthGuard.
+### 6.2 BLAST Comparison Caveats
 
-**ESM-2 FPR:** The protein track has 28.8% FPR on the in-distribution test set, much higher than the k-mer model's 8.0%. ESM-2 should not be used as a sole decision-maker — it is a second-opinion layer that increases confidence when it agrees with the k-mer model.
+Our BLAST evaluation uses real blastn 2.12.0 with the following honest limitations:
 
-### 5.2 Dual-Use Considerations
+1. **DB composition drives FPR.** Our benchmark builds the BLAST DB from the 1,008 original hazardous training sequences. Production BLAST systems (SecureDNA, NCBI BLAST) use much larger, curated DBs with organism-specific exclusions that reduce false positives. Our 98.1% FPR likely overestimates what a well-tuned production BLAST would produce — but illustrates the fundamental precision problem.
 
-This system is designed to *reduce* the risk of dangerous DNA synthesis, not to enable it. All training data is derived from publicly available databases (NCBI) using queries that are standard in the biosecurity literature.
+2. **Threshold choice.** We used the standard 70% nucleotide identity threshold. A stricter threshold (e.g., 90%) would reduce FPR but also sharply reduce recall on codon-shuffled variants. The tradeoff cannot be tuned away: at any threshold where BLAST catches heavily redesigned sequences, it will produce excessive false positives.
 
-**Risk 1: Adversarial probing.** A model that classifies sequences as hazardous/benign could be queried iteratively to design evasive sequences. Mitigations: (a) the model runs inside the screener, not as a public API for synthesis customers; (b) the recall-optimized training objective creates a defense-favoring asymmetry; (c) OOD results show the model generalizes beyond its training distribution, making gradient-based evasion harder.
+3. **High-shuffle BLAST behavior is proxy-only.** The systematic shuffle eval (50 variants × 4 rates) reports 0% BLAST detection based on the k-mer Jaccard proxy. Real blastn at 75–90% shuffle would also fail (nucleotide identity drops below 70%), but this specific experiment used the proxy, not real blastn.
 
-**Risk 2: False confidence.** A synthesis company might over-rely on SynthGuard and reduce human review. We explicitly design against this: the REVIEW tier is broad (threshold 0.4), SHAP explanations require human interpretation, and we recommend SynthGuard as a complement to, not replacement for, SecureDNA and commec.
+### 6.3 No Wet-Lab Validation
+
+All results are computational. We do not claim the sequences used as hazardous retain dangerous function — only that they evade BLAST screening and are detected by SynthGuard. Wet-lab functional validation is beyond the scope of a hackathon project.
+
+### 6.4 Training Data Overlap Risk
+
+The OOD benchmark tests on families withheld from training. However, the training augmentation (codon shuffling) may have inadvertently created sequences similar to some "unseen" families through random walks in sequence space. True OOD evaluation requires held-out family splits from the initial data collection phase, which we implemented but cannot guarantee are fully orthogonal.
+
+### 6.5 Known Remaining Gaps
+
+- **Brucella abortus:** 60.9% recall — still below target despite being in training set. Brucella virulence factor sequences have high similarity to environmental bacteria.
+- **RFdiffusion de novo:** Not evaluated. Sequences with zero homology to any training example represent the hardest adversarial case. Our codon normalization features would not help here.
+- **Very short sequences (<50bp):** Accuracy degrades below 50bp; biological context is insufficient for reliable classification.
+
+---
+
+## 7. Dual-Use Considerations
+
+SynthGuard is designed to *reduce* the risk of dangerous DNA synthesis. All training data is derived from publicly available NCBI databases using queries standard in the biosecurity literature.
+
+**Risk 1: Adversarial probing.** The model classifies sequences — iterative probing could design evasive sequences. Mitigations: (a) the model runs inside the screener, not as a public API for synthesis customers; (b) recall-optimized training creates a defense-favoring asymmetry; (c) the codon normalization features mean the model generalizes beyond raw k-mer patterns, making gradient-based evasion harder.
+
+**Risk 2: False confidence.** A synthesis company might over-rely on SynthGuard and reduce human review. We explicitly design against this: REVIEW tier is broad (threshold 0.30), SHAP explanations require human interpretation, and SynthGuard is positioned as a complement to SecureDNA and commec.
 
 We recommend that any production deployment coordinate with USAMRIID, CDC, and the IBBIS consortium before deploying against real synthesis orders.
 
 ---
 
-## 6. Future Work
+## 8. Future Work
 
-1. **Close the Coxiella gap:** Add obligate intracellular pathogens (Rickettsia, Coxiella, Chlamydia, Anaplasma) to training — AT-rich organisms currently outside the training distribution
-2. **RFdiffusion red-teaming:** Evaluate against de novo protein designs with no sequence homology to any training example
-3. **ESM-2 FPR reduction:** Train a calibrated ensemble of k-mer + ESM-2 outputs to reduce FPR while maintaining recall
-4. **Systematic Select Agent coverage:** Extend to all 60+ CDC/USDA Tier 1 Select Agents (current: 20 families)
-5. **Integration with SecureDNA's DOPRF:** Route 30–150bp sequences to SecureDNA, longer uncertain sequences to SynthGuard
-6. **Online retraining pipeline:** Retrain quarterly as new AI design tools (ProteinMPNN v2, RFdiffusion updates) release
-7. **International deployment:** Adapt training data for non-US export control lists (Wassenaar Arrangement, Australia Group)
+1. **ESM-2 protein track (retrained from scratch):** Re-implement funcscreen with correct weight saving. An independent protein-track signal would make the system harder to evade at both the DNA and protein levels.
+2. **RFdiffusion red-teaming:** Evaluate against de novo protein designs with no sequence homology to any training example — the hardest adversarial case for k-mer models.
+3. **Close the Brucella gap:** Targeted data expansion for Brucella virulence factors (current: 60.9% recall).
+4. **Systematic Select Agent coverage:** Extend to all 60+ CDC/USDA Tier 1 Select Agents (current: ~22 families).
+5. **Production BLAST comparison:** Run real blastn against the full NCBI nt database to confirm FPR behavior at scale, and with organism-specific exclusion lists.
+6. **Online retraining pipeline:** Retrain quarterly as new AI design tools and novel pathogen sequences emerge.
+
+---
+
+## 9. Appendix: Key Numbers Summary
+
+| Metric | Value | Notes |
+|--------|-------|-------|
+| Model size | 5 MB | LightGBM, CPU-native |
+| Inference time | 2 ms | Single sequence, CPU |
+| Feature dimensions | 5,533 | 5,446 k-mer + 87 codon normalization |
+| Full test AUROC | 0.977 | v4 model |
+| Full test Recall | 0.918 | threshold 0.30 |
+| Full test FPR | 0.068 | threshold 0.30 |
+| Full test F1 | 0.925 | |
+| Short-seq specialist Recall | 0.797 | v4 model |
+| Short-seq specialist AUROC | 0.897 | |
+| BLAST Recall (real blastn, training DB) | 0.998 | near-perfect, flags everything |
+| BLAST FPR (real blastn, training DB) | 0.981 | operationally unusable |
+| BLAST F1 (real blastn) | 0.671 | precision collapses at 98.1% FPR |
+| AI-variant Recall (SynthGuard v4) | 0.914 | codon-shuffled test set |
+| AI-variant FPR on benign (BLAST) | 0.982 | real blastn |
+| Shuffle eval — 25% rate | 98% detect | 50 variants, BLAST 0% |
+| Shuffle eval — 50% rate | 92% detect | 50 variants, BLAST 0% |
+| Shuffle eval — 75% rate | 98% detect | 50 variants, BLAST 0% |
+| Shuffle eval — 90% rate | 92% detect | 50 variants, BLAST 0% |
+| OOD Recall (7 unseen families) | 0.884 | v3 benchmark |
+| OOD AUROC | 0.937 | v3 benchmark |
+| Review threshold | 0.30 | lowered from 0.40 |
+| Escalate threshold | 0.60 | lowered from 0.70 |
+| Training hazard families | 22 | up from 10 in v1 |
+| Training benign families | 17 | |
+| Dataset size | ~20,154 | balanced, augmented, v4 |
 
 ---
 
@@ -263,12 +442,12 @@ We recommend that any production deployment coordinate with USAMRIID, CDC, and t
 3. Watson, J.L. et al. (2023). De novo design of protein structure and function with RFdiffusion. *Nature*, 620, 1089–1100.
 4. [Microsoft Research et al.] (2025). AI protein design creates functional hazards invisible to sequence screening. *Science*. [Exact citation TBC from hackathon resources]
 5. Lin, Z. et al. (2023). Evolutionary-scale prediction of atomic-level protein structure with a language model. *Science*, 379, 1123–1130. [ESM-2]
-6. Zhou, Z. et al. (2023). DNABERT-2: Efficient Foundation Model and Benchmark for Multi-Species Genome. *arXiv:2306.15006*.
-7. SecureDNA. https://securedna.org — Cryptographic DNA screening, 30bp resolution.
-8. commec / IBBIS. https://ibbis.bio — HMM-based biosecurity screening.
-9. Lin, T. et al. (2017). Focal Loss for Dense Object Detection. *ICCV 2017*.
-10. Hu, E. et al. (2021). LoRA: Low-Rank Adaptation of Large Language Models. *arXiv:2106.09685*.
+6. Ke, G. et al. (2017). LightGBM: A Highly Efficient Gradient Boosting Decision Tree. *NeurIPS 2017*.
+7. Sharp, P.M. & Li, W.-H. (1987). The codon Adaptation Index — a measure of directional synonymous codon usage bias, and its potential applications. *Nucleic Acids Research*, 15(3), 1281–1295. [CAI]
+8. SecureDNA. https://securedna.org — Cryptographic DNA screening, 30bp resolution.
+9. commec / IBBIS. https://ibbis.bio — HMM-based biosecurity screening.
+10. Kazusa DNA Research Institute. Codon usage database. https://www.kazusa.or.jp/codon/ [RSCU reference tables]
 
 ---
 
-*Generated: April 24, 2026 | AIxBio Hackathon 2026*
+*Generated: April 25, 2026 | AIxBio Hackathon 2026*

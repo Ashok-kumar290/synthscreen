@@ -35,6 +35,217 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Track 4: split-order detection (inlined) ─────────────────────────────────
+
+import json as _json
+import sqlite3 as _sqlite3
+import time as _time
+from pathlib import Path as _Path
+from typing import Optional as _Optional
+
+_SPLIT_DB = _Path("/tmp/split_orders.db")
+_MIN_OVERLAP = 15
+_MAX_ASSEMBLED = 12_000
+_MAX_FRAGS = 30
+
+
+def _split_conn():
+    c = _sqlite3.connect(str(_SPLIT_DB), check_same_thread=False)
+    c.row_factory = _sqlite3.Row
+    c.executescript("""
+        CREATE TABLE IF NOT EXISTS fragments (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_id  TEXT NOT NULL,
+            order_id     TEXT NOT NULL,
+            sequence     TEXT NOT NULL,
+            length       INTEGER NOT NULL,
+            ind_score    REAL,
+            ind_decision TEXT,
+            submitted_at REAL NOT NULL,
+            flagged      INTEGER DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS alerts (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_id    TEXT NOT NULL,
+            assembled_seq  TEXT NOT NULL,
+            assembly_score REAL NOT NULL,
+            fragment_ids   TEXT NOT NULL,
+            created_at     REAL NOT NULL
+        );
+    """)
+    c.commit()
+    return c
+
+
+def _frag_overlap(a: str, b: str) -> int:
+    cap = min(len(a), len(b))
+    for k in range(cap, _MIN_OVERLAP - 1, -1):
+        if a[-k:] == b[:k]:
+            return k
+    return 0
+
+
+def _assemble(seqs: list) -> str:
+    if not seqs:
+        return ""
+    pool = list(seqs)
+    while len(pool) > 1:
+        best, bi, bj = 0, -1, -1
+        for i in range(len(pool)):
+            for j in range(len(pool)):
+                if i == j:
+                    continue
+                ov = _frag_overlap(pool[i], pool[j])
+                if ov > best:
+                    best, bi, bj = ov, i, j
+        if best < _MIN_OVERLAP:
+            break
+        merged = pool[bi] + pool[bj][best:]
+        pool = [s for k, s in enumerate(pool) if k not in (bi, bj)]
+        pool.append(merged)
+        if len(pool[-1]) > _MAX_ASSEMBLED:
+            break
+    return max(pool, key=len)
+
+
+class _FragIn(BaseModel):
+    customer_id: str
+    order_id: str
+    sequence: str
+
+
+class _FragOut(BaseModel):
+    fragment_id: int
+    individual_decision: str
+    individual_score: float
+    assembly_attempted: bool
+    assembly_decision: Optional[str] = None
+    assembly_score: Optional[float] = None
+    alert: bool = False
+    alert_id: Optional[int] = None
+    message: str
+
+
+class _CustStatus(BaseModel):
+    customer_id: str
+    fragment_count: int
+    flagged_count: int
+    alerts: list
+    fragments: list
+
+
+@app.post("/split/submit", response_model=_FragOut, tags=["split-order-detection"])
+async def split_submit(req: _FragIn):
+    """Submit one synthesis fragment. Assembles with prior fragments from the same customer."""
+    seq = req.sequence.upper().replace("U", "T").strip()
+    if len(seq) < 10:
+        raise HTTPException(status_code=400, detail="Fragment too short (<10bp)")
+
+    db = _split_conn()
+    n_existing = db.execute(
+        "SELECT COUNT(*) FROM fragments WHERE customer_id=?", (req.customer_id,)
+    ).fetchone()[0]
+    if n_existing >= _MAX_FRAGS:
+        db.close()
+        raise HTTPException(status_code=429, detail="Fragment cap reached for customer")
+
+    ind = _screen_one(seq)
+    ind_score = ind["risk_score"]
+    ind_decision = ind["decision"]
+
+    cur = db.execute(
+        "INSERT INTO fragments (customer_id,order_id,sequence,length,ind_score,ind_decision,submitted_at) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (req.customer_id, req.order_id, seq, len(seq), ind_score, ind_decision, _time.time()),
+    )
+    frag_id = cur.lastrowid
+    db.commit()
+
+    rows = db.execute(
+        "SELECT id,sequence FROM fragments WHERE customer_id=? ORDER BY submitted_at",
+        (req.customer_id,),
+    ).fetchall()
+
+    asm_decision = None
+    asm_score = None
+    alert = False
+    alert_id = None
+    attempted = len(rows) >= 2
+
+    if attempted:
+        seqs = [r["sequence"] for r in rows]
+        ids  = [r["id"] for r in rows]
+        assembled = _assemble(seqs)
+        if len(assembled) >= 50:
+            asm = _screen_one(assembled)
+            asm_score = asm["risk_score"]
+            asm_decision = asm["decision"]
+            if asm_decision == "ESCALATE":
+                alert = True
+                for fid in ids:
+                    db.execute("UPDATE fragments SET flagged=1 WHERE id=?", (fid,))
+                cur2 = db.execute(
+                    "INSERT INTO alerts (customer_id,assembled_seq,assembly_score,fragment_ids,created_at) "
+                    "VALUES (?,?,?,?,?)",
+                    (req.customer_id, assembled[:1000], asm_score, _json.dumps(ids), _time.time()),
+                )
+                alert_id = cur2.lastrowid
+
+    db.commit()
+    db.close()
+
+    parts = [f"Fragment stored (id={frag_id}, {len(seq)}bp)."]
+    parts.append(f"Individual screen: {ind_decision} ({ind_score:.3f}).")
+    if attempted:
+        parts.append(f"Assembly of {len(rows)} fragment(s): {asm_decision} ({asm_score:.3f}).")
+    if alert:
+        parts.append("ALERT: assembled sequence flagged ESCALATE.")
+
+    return _FragOut(
+        fragment_id=frag_id,
+        individual_decision=ind_decision,
+        individual_score=ind_score,
+        assembly_attempted=attempted,
+        assembly_decision=asm_decision,
+        assembly_score=asm_score,
+        alert=alert,
+        alert_id=alert_id,
+        message=" ".join(parts),
+    )
+
+
+@app.get("/split/customer/{customer_id}", response_model=_CustStatus, tags=["split-order-detection"])
+async def split_customer_status(customer_id: str):
+    """All fragments and alerts for a customer."""
+    db = _split_conn()
+    frags = db.execute(
+        "SELECT id,order_id,length,ind_score,ind_decision,submitted_at,flagged "
+        "FROM fragments WHERE customer_id=? ORDER BY submitted_at", (customer_id,)
+    ).fetchall()
+    alerts = db.execute(
+        "SELECT id,assembly_score,fragment_ids,created_at FROM alerts "
+        "WHERE customer_id=? ORDER BY created_at DESC", (customer_id,)
+    ).fetchall()
+    db.close()
+    return _CustStatus(
+        customer_id=customer_id,
+        fragment_count=len(frags),
+        flagged_count=sum(1 for f in frags if f["flagged"]),
+        alerts=[dict(a) for a in alerts],
+        fragments=[dict(f) for f in frags],
+    )
+
+
+@app.delete("/split/customer/{customer_id}/flush", tags=["split-order-detection"])
+async def split_flush(customer_id: str):
+    """Clear all fragment state for a customer."""
+    db = _split_conn()
+    db.execute("DELETE FROM fragments WHERE customer_id=?", (customer_id,))
+    db.execute("DELETE FROM alerts WHERE customer_id=?", (customer_id,))
+    db.commit()
+    db.close()
+    return {"ok": True, "customer_id": customer_id}
+
 # ── Feature extraction (must match training pipeline) ─────────────────────────
 
 VOCAB = {k: ["".join(p) for p in product("ACGT", repeat=k)] for k in [3, 4, 5, 6]}

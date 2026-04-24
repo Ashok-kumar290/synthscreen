@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
 lightgbm
-scikit-learn
+scikit-learn==1.6.1
 numpy
 huggingface_hub

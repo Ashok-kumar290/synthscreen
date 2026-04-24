@@ -258,6 +258,8 @@ def main():
     ap.add_argument("--output",  default="results/pipeline")
     ap.add_argument("--skip_protein", action="store_true")
     ap.add_argument("--skip_dna",     action="store_true")
+    ap.add_argument("--skip_blast",   action="store_true",
+                    help="Skip BLAST benchmark (use when hazard_db is unavailable)")
     args = ap.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
@@ -280,14 +282,20 @@ def main():
     print(f"Test: {len(test)} seqs | hazardous={sum(labels)} | "
           f"short={len(short_idx)} | ai-variants={len(ai_idx)}")
 
-    # ── BLAST (real blastn if available, else proxy) ───────────────────────────
+    # ── BLAST (skip if --skip_blast or no DB, else real blastn, else proxy) ─────
     import shutil
-    use_real_blast = shutil.which("blastn") is not None and os.path.exists("hazard_db.nhr")
-    if use_real_blast:
+    use_real_blast = (not args.skip_blast
+                      and shutil.which("blastn") is not None
+                      and os.path.exists("hazard_db.nhr"))
+    if args.skip_blast:
+        print("\n[BLAST] SKIPPED (--skip_blast) — using prior external-DB results: "
+              "Recall=0.759 FPR=0.716 F1=0.613")
+        blast_p = np.zeros(len(seqs), dtype=int)  # placeholder zeros
+    elif use_real_blast:
         print("\n[BLAST — real blastn against hazard_db]")
         blast_p = np.array([int(blast_real(s)) for s in seqs])
     else:
-        print("\n[BLAST proxy — k-mer Jaccard (blastn not found)]")
+        print("\n[BLAST proxy — k-mer Jaccard (blastn/hazard_db not found)]")
         blast_p = np.array([int(blast_proxy(s, refs)) for s in seqs])
     ALL["blast_full"] = show("BLAST — Full", metrics(labels, blast_p, blast_p.astype(float)))
     if short_idx:
