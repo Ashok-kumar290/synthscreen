@@ -176,14 +176,21 @@ def main():
         print("\n[funcscreen DNABERT-2] SKIPPED (--skip_dna)")
     else:
         print("\n[funcscreen DNABERT-2]")
-        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+        from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoConfig
 
         base_id = "zhihan1996/DNABERT-2-117M"
         tok_dna = AutoTokenizer.from_pretrained(base_id, trust_remote_code=True)
 
+        # Disable flash attention: DNABERT-2's bundled flash_attn_triton.py uses
+        # tl.dot(trans_b=True) which was removed in newer Triton versions.
+        # Setting use_flash_attn=False makes it fall back to standard attention.
+        cfg = AutoConfig.from_pretrained(base_id, trust_remote_code=True)
+        cfg.use_flash_attn = False
+        cfg.num_labels = 2
+
         with torch.device("cpu"):
             base_dna = AutoModelForSequenceClassification.from_pretrained(
-                base_id, num_labels=2, trust_remote_code=True,
+                base_id, config=cfg, trust_remote_code=True,
                 low_cpu_mem_usage=False, device_map=None)
 
         lora_cfg = LoraConfig(r=16, lora_alpha=32, target_modules=["Wqkv"],
