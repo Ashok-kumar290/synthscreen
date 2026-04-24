@@ -53,6 +53,15 @@ HAZARDOUS_QUERIES = [
     # Added: fix Coxiella 3.2% recall — AT-rich obligate intracellular pathogen
     '"Coxiella burnetii"[Organism] AND "virulence" AND 300:3000[SLEN]',
     '"Coxiella burnetii"[Organism] AND "effector" AND 300:3000[SLEN]',
+    # Added: expand ricin coverage — RCA60 and RCA120 isoforms, codon variants
+    '"Ricinus communis"[Organism] AND "ricin" AND "chain A" AND 500:3000[SLEN]',
+    '"Ricinus communis"[Organism] AND "agglutinin" AND "RCA" AND 500:3000[SLEN]',
+    # Added: abrin (structurally similar to ricin, closes coverage gap)
+    '"Abrus precatorius"[Organism] AND "abrin" AND "chain A" AND 300:3000[SLEN]',
+    # Added: Francisella tularensis (tularemia, Select Agent)
+    '"Francisella tularensis"[Organism] AND "virulence" AND 300:3000[SLEN]',
+    # Added: smallpox-adjacent poxvirus virulence factors
+    '"Monkeypox virus"[Organism] AND "virulence" AND 300:3000[SLEN]',
 ]
 
 # Publicly safe, benign sequences
