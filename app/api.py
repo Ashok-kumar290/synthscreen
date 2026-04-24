@@ -601,6 +601,18 @@ class BioLensRequest(BaseModel):
     seq_type: str = "DNA"
 
 
+def _is_protein(seq: str) -> bool:
+    """Return True if the sequence looks like amino acids rather than DNA.
+
+    Amino acid letters that never appear in IUPAC DNA: E F I L M P Q Z
+    If >3% of characters are protein-only letters, classify as protein.
+    """
+    protein_only = set("EFILMPQZ")
+    n = max(len(seq), 1)
+    hits = sum(1 for c in seq if c in protein_only)
+    return hits / n > 0.03
+
+
 @app.post("/biolens/screen")
 async def biolens_screen(req: BioLensRequest):
     """BioLens adapter — speaks the Track 3 contract schema."""
@@ -608,7 +620,8 @@ async def biolens_screen(req: BioLensRequest):
         seq = req.sequence.upper().replace("U", "T").strip()
         seq_type = req.seq_type.upper() if req.seq_type.upper() in ("DNA", "PROTEIN") else "DNA"
 
-        if seq_type == "PROTEIN":
+        # Detect protein from sequence content regardless of what the client declares
+        if seq_type == "PROTEIN" or _is_protein(seq):
             return {"ok": False, "hazard_score": None, "risk_level": None,
                     "confidence": None, "category": None,
                     "explanation": "SynthGuard is a DNA-only screener. Protein sequences are not supported — please submit the coding DNA sequence instead.",
