@@ -110,6 +110,7 @@ def main():
     ap.add_argument("--dataset", default="data/processed/synthscreen_dna_v1_dataset")
     ap.add_argument("--output",  default="results/pipeline")
     ap.add_argument("--skip_protein", action="store_true")
+    ap.add_argument("--skip_dna",     action="store_true")
     args = ap.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
@@ -146,35 +147,65 @@ def main():
             metrics(al, blast_p[ai_idx], blast_p[ai_idx].astype(float)))
 
     # ── DNABERT-2 ─────────────────────────────────────────────────────────────
-    print("\n[funcscreen DNABERT-2]")
-    from transformers import AutoTokenizer, AutoModelForSequenceClassification
+    if args.skip_dna:
+        print("\n[funcscreen DNABERT-2] SKIPPED (--skip_dna)")
+    else:
+        print("\n[funcscreen DNABERT-2]")
+        from transformers import AutoTokenizer, AutoModel
+        import torch.nn as nn
 
-    base_id = "zhihan1996/DNABERT-2-117M"
-    tok_dna = AutoTokenizer.from_pretrained(base_id, trust_remote_code=True)
-    with torch.device("cpu"):
-        base_dna = AutoModelForSequenceClassification.from_pretrained(
-            base_id, num_labels=2, trust_remote_code=True,
-            ignore_mismatched_sizes=True, low_cpu_mem_usage=False, device_map=None)
-    lora_cfg = LoraConfig(r=16, lora_alpha=32, target_modules=["Wqkv"],
-                          lora_dropout=0.1, bias="none",
-                          task_type=TaskType.SEQ_CLS, modules_to_save=["classifier"])
-    model_dna = get_peft_model(base_dna, lora_cfg)
-    sd = torch.load(hf_hub_download(REPO, "dna_robust/model_state_dict.pt"), map_location="cpu")
-    model_dna.load_state_dict(sd, strict=False)
-    model_dna = model_dna.to(DEVICE).eval()
-    print("  Model loaded. Running inference...")
+        base_id = "zhihan1996/DNABERT-2-117M"
+        tok_dna = AutoTokenizer.from_pretrained(base_id, trust_remote_code=True)
 
-    dna_p   = screen_batch(seqs, model_dna, tok_dna)
-    dna_pr  = (dna_p >= 0.5).astype(int)
-    ALL["dna_full"] = show("funcscreen DNA — Full", metrics(labels, dna_pr, dna_p))
-    if short_idx:
-        ALL["dna_short"] = show("funcscreen DNA — Short",
-            metrics([labels[i] for i in short_idx], dna_pr[short_idx], dna_p[short_idx]))
-    if ai_idx:
-        ALL["dna_ai"] = show("funcscreen DNA — AI Variants",
-            metrics([labels[i] for i in ai_idx], dna_pr[ai_idx], dna_p[ai_idx]))
+        # Load as base encoder — avoids AutoModelForSequenceClassification
+        # config-class mismatch that occurs with transformers>4.40.0
+        with torch.device("cpu"):
+            encoder = AutoModel.from_pretrained(
+                base_id, trust_remote_code=True,
+                low_cpu_mem_usage=False, device_map=None)
 
-    del model_dna; torch.cuda.empty_cache()
+        hidden_size = encoder.config.hidden_size
+
+        class DNABERT2Clf(nn.Module):
+            def __init__(self, enc, hs, nl=2):
+                super().__init__()
+                self.bert = enc
+                self.dropout = nn.Dropout(0.1)
+                self.classifier = nn.Linear(hs, nl)
+            def forward(self, input_ids, attention_mask=None, **kw):
+                out = self.bert(input_ids, attention_mask=attention_mask)
+                cls = out.last_hidden_state[:, 0, :]
+                logits = self.classifier(self.dropout(cls))
+                class O: pass
+                o = O(); o.logits = logits; return o
+
+        base_dna = DNABERT2Clf(encoder, hidden_size)
+
+        lora_cfg = LoraConfig(r=16, lora_alpha=32, target_modules=["Wqkv"],
+                              lora_dropout=0.1, bias="none",
+                              task_type=TaskType.SEQ_CLS,
+                              modules_to_save=["classifier"])
+        model_dna = get_peft_model(base_dna, lora_cfg)
+        sd = torch.load(hf_hub_download(REPO, "dna_robust/model_state_dict.pt"),
+                        map_location="cpu")
+        # Remap keys: saved as base_model.model.bert.* → base_model.model.bert.*  (same)
+        # or base_model.model.classifier.* → base_model.model.classifier.*
+        missing, unexpected = model_dna.load_state_dict(sd, strict=False)
+        print(f"  Loaded state dict — missing={len(missing)} unexpected={len(unexpected)}")
+        model_dna = model_dna.to(DEVICE).eval()
+        print("  Model loaded. Running inference...")
+
+        dna_p  = screen_batch(seqs, model_dna, tok_dna)
+        dna_pr = (dna_p >= 0.5).astype(int)
+        ALL["dna_full"] = show("funcscreen DNA — Full", metrics(labels, dna_pr, dna_p))
+        if short_idx:
+            ALL["dna_short"] = show("funcscreen DNA — Short",
+                metrics([labels[i] for i in short_idx], dna_pr[short_idx], dna_p[short_idx]))
+        if ai_idx:
+            ALL["dna_ai"] = show("funcscreen DNA — AI Variants",
+                metrics([labels[i] for i in ai_idx], dna_pr[ai_idx], dna_p[ai_idx]))
+
+        del model_dna; torch.cuda.empty_cache()
 
     # ── ESM-2 (optional) ──────────────────────────────────────────────────────
     if not args.skip_protein:
