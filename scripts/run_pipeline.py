@@ -18,6 +18,31 @@ from pathlib import Path
 
 import torch
 import torch.nn.functional as F
+
+# ── Patch transformers auto_factory for DNABERT-2 compatibility ───────────────
+# Newer transformers (>4.40) added a strict check that model_class.config_class
+# must exactly match the config class. DNABERT-2's custom model inherits
+# config_class=standard BertConfig but its config is a custom subclass → mismatch.
+# Fix: temporarily align config_class during registration so the check passes.
+def _patch_auto_factory():
+    import transformers.models.auto.auto_factory as _af
+    _orig = _af._BaseAutoModelClass.register.__func__
+
+    @classmethod
+    def _permissive_register(cls, config_class, model_class, exist_ok=False):
+        old_cc = getattr(model_class, "config_class", None)
+        if old_cc is not None and str(old_cc) != str(config_class):
+            model_class.config_class = config_class
+            try:
+                _orig(cls, config_class, model_class, exist_ok=exist_ok)
+            finally:
+                model_class.config_class = old_cc
+        else:
+            _orig(cls, config_class, model_class, exist_ok=exist_ok)
+
+    _af._BaseAutoModelClass.register = _permissive_register
+
+_patch_auto_factory()
 from datasets import load_from_disk
 from huggingface_hub import hf_hub_download
 from peft import LoraConfig, get_peft_model, TaskType
@@ -151,35 +176,15 @@ def main():
         print("\n[funcscreen DNABERT-2] SKIPPED (--skip_dna)")
     else:
         print("\n[funcscreen DNABERT-2]")
-        from transformers import AutoTokenizer, AutoModel
-        import torch.nn as nn
+        from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
         base_id = "zhihan1996/DNABERT-2-117M"
         tok_dna = AutoTokenizer.from_pretrained(base_id, trust_remote_code=True)
 
-        # Load as base encoder — avoids AutoModelForSequenceClassification
-        # config-class mismatch that occurs with transformers>4.40.0
         with torch.device("cpu"):
-            encoder = AutoModel.from_pretrained(
-                base_id, trust_remote_code=True,
+            base_dna = AutoModelForSequenceClassification.from_pretrained(
+                base_id, num_labels=2, trust_remote_code=True,
                 low_cpu_mem_usage=False, device_map=None)
-
-        hidden_size = encoder.config.hidden_size
-
-        class DNABERT2Clf(nn.Module):
-            def __init__(self, enc, hs, nl=2):
-                super().__init__()
-                self.bert = enc
-                self.dropout = nn.Dropout(0.1)
-                self.classifier = nn.Linear(hs, nl)
-            def forward(self, input_ids, attention_mask=None, **kw):
-                out = self.bert(input_ids, attention_mask=attention_mask)
-                cls = out.last_hidden_state[:, 0, :]
-                logits = self.classifier(self.dropout(cls))
-                class O: pass
-                o = O(); o.logits = logits; return o
-
-        base_dna = DNABERT2Clf(encoder, hidden_size)
 
         lora_cfg = LoraConfig(r=16, lora_alpha=32, target_modules=["Wqkv"],
                               lora_dropout=0.1, bias="none",
@@ -188,10 +193,8 @@ def main():
         model_dna = get_peft_model(base_dna, lora_cfg)
         sd = torch.load(hf_hub_download(REPO, "dna_robust/model_state_dict.pt"),
                         map_location="cpu")
-        # Remap keys: saved as base_model.model.bert.* → base_model.model.bert.*  (same)
-        # or base_model.model.classifier.* → base_model.model.classifier.*
         missing, unexpected = model_dna.load_state_dict(sd, strict=False)
-        print(f"  Loaded state dict — missing={len(missing)} unexpected={len(unexpected)}")
+        print(f"  Loaded — missing={len(missing)} unexpected={len(unexpected)}")
         model_dna = model_dna.to(DEVICE).eval()
         print("  Model loaded. Running inference...")
 
