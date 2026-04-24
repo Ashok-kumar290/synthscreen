@@ -257,10 +257,10 @@ def _coerce_integrated_response(payload: dict[str, Any], fallback_model_name: st
         return _error_response(fallback_model_name, f"invalid_integrated_response:{exc}")
 
 
+_DEFAULT_ENDPOINT = "https://seyomi-synthguard-api.hf.space/biolens/screen"
+
 def _screen_integrated(sequence: str, seq_type: str, model_name: str) -> dict[str, Any]:
-    endpoint = os.getenv("SYNTHSCREEN_ENDPOINT")
-    if not endpoint:
-        return _error_response(model_name, "missing_synthscreen_endpoint")
+    endpoint = os.getenv("SYNTHSCREEN_ENDPOINT", _DEFAULT_ENDPOINT)
 
     payload = json.dumps({"sequence": sequence, "seq_type": seq_type}).encode("utf-8")
     timeout_seconds = float(os.getenv("SYNTHSCREEN_TIMEOUT_SECONDS", "15"))
@@ -288,7 +288,7 @@ def screen_sequence(sequence: str, seq_type: str) -> dict[str, Any]:
     Screen a DNA or protein sequence through the BioLens adapter contract.
     """
 
-    mode = os.getenv("BIOLENS_MODE", "mock").strip().lower() or "mock"
+    mode = os.getenv("BIOLENS_MODE", "integrated").strip().lower() or "integrated"
     model_name = f"biolens-{mode}-adapter"
     normalized, validation_error = _validate_sequence(sequence, seq_type)
 
