@@ -17,9 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=user . /app
 
-# Download k-mer models from HF Hub at build time
-RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('Seyomi/synthguard-kmer', repo_type='model', local_dir='models/synthguard_kmer')"
-
 EXPOSE 7860
 
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "7860"]
+# Download latest models at startup so Space always uses the current HF version
+CMD ["sh", "-c", "python -c \"from huggingface_hub import snapshot_download; snapshot_download('Seyomi/synthguard-kmer', repo_type='model', local_dir='models/synthguard_kmer')\" && uvicorn api:app --host 0.0.0.0 --port 7860"]
