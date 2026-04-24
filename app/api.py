@@ -190,8 +190,8 @@ async def startup():
 
 class ScreenRequest(BaseModel):
     sequence: str = Field(..., description="DNA or RNA sequence (IUPAC nucleotides)")
-    threshold_review: float = Field(0.4, ge=0.0, le=1.0)
-    threshold_escalate: float = Field(0.7, ge=0.0, le=1.0)
+    threshold_review: float = Field(0.3, ge=0.0, le=1.0)
+    threshold_escalate: float = Field(0.6, ge=0.0, le=1.0)
 
 
 class ScreenResponse(BaseModel):
@@ -207,8 +207,8 @@ class ScreenResponse(BaseModel):
 
 class BatchScreenRequest(BaseModel):
     sequences: list[str]
-    threshold_review: float = 0.4
-    threshold_escalate: float = 0.7
+    threshold_review: float = 0.3
+    threshold_escalate: float = 0.6
 
 
 class BatchScreenResponse(BaseModel):
@@ -221,8 +221,8 @@ class BatchScreenResponse(BaseModel):
 
 def _screen_one(
     seq: str,
-    threshold_review: float = 0.4,
-    threshold_escalate: float = 0.7,
+    threshold_review: float = 0.3,
+    threshold_escalate: float = 0.6,
 ) -> dict:
     _load_models()
 
@@ -396,6 +396,13 @@ async def biolens_screen(req: BioLensRequest):
     try:
         seq = req.sequence.upper().replace("U", "T").strip()
         seq_type = req.seq_type.upper() if req.seq_type.upper() in ("DNA", "PROTEIN") else "DNA"
+
+        if seq_type == "PROTEIN":
+            return {"ok": False, "hazard_score": None, "risk_level": None,
+                    "confidence": None, "category": None,
+                    "explanation": "SynthGuard is a DNA-only screener. Protein sequences are not supported — please submit the coding DNA sequence instead.",
+                    "baseline_result": None, "model_name": "synthguard-kmer",
+                    "error": "protein_not_supported"}
 
         if len(seq) < 10:
             return {"ok": False, "hazard_score": None, "risk_level": None,
