@@ -350,8 +350,8 @@ def main():
 
         # Keep only sequences >= 150bp (to get meaningful protein >= 50aa)
         # and that yield >= 30aa in best reading frame
-        prot_seqs, prot_lbls, prot_src = [], [], []
-        for seq, lbl, src in zip(seqs, labels, sources):
+        prot_seqs, prot_lbls, prot_src, prot_orig_idx = [], [], [], []
+        for idx, (seq, lbl, src) in enumerate(zip(seqs, labels, sources)):
             if len(seq) < 150:
                 continue
             aa = translate_best_frame(seq)
@@ -359,6 +359,7 @@ def main():
                 prot_seqs.append(aa)
                 prot_lbls.append(lbl)
                 prot_src.append(src)
+                prot_orig_idx.append(idx)
 
         print(f"  Translatable sequences: {len(prot_seqs)} "
               f"({sum(prot_lbls)} hazardous / {len(prot_lbls)-sum(prot_lbls)} benign)")
@@ -454,6 +455,23 @@ def main():
         ALL["kmer_short_specialist"] = show("SynthGuard Short-Seq Specialist",
             metrics([labels[i] for i in short_idx], (ssp>=0.5).astype(int), ssp))
 
+    # ── Ensemble: k-mer + ESM-2 ───────────────────────────────────────────────
+    if "esm2_full" in ALL and "prot_orig_idx" in dir() and prot_orig_idx:
+        print("\n[SynthGuard Ensemble: k-mer + ESM-2]")
+        prot_orig_idx = np.array(prot_orig_idx)
+        ens_kmer  = gp[prot_orig_idx]
+        ens_esm2  = prot_pr
+        ens_scores = 0.6 * ens_kmer + 0.4 * ens_esm2
+        ens_preds  = (ens_scores >= 0.5).astype(int)
+        ALL["ensemble_full"] = show("SynthGuard Ensemble (k-mer+ESM-2) — Full",
+            metrics(prot_lbls, ens_preds, ens_scores))
+        ai_ens = [i for i, s in enumerate(prot_src)
+                  if any(t in s for t in ["codon","shuffled","variant","fragment"])]
+        if ai_ens and len(set(np.array(prot_lbls)[ai_ens])) > 1:
+            ALL["ensemble_ai"] = show("SynthGuard Ensemble — AI Variants",
+                metrics([prot_lbls[i] for i in ai_ens],
+                        ens_preds[ai_ens], ens_scores[ai_ens]))
+
     # ── Save models ───────────────────────────────────────────────────────────
     os.makedirs("models/synthguard_kmer", exist_ok=True)
     with open("models/synthguard_kmer/general_model.pkl", "wb") as f: pickle.dump(cal_g, f)
@@ -483,6 +501,7 @@ def main():
         ("dna_full",             "funcscreen DNABERT-2 — Full"),
         ("kmer_full",            "SynthGuard k-mer — Full"),
         ("esm2_full",            "funcscreen ESM-2 — Full (protein)"),
+        ("ensemble_full",        "SynthGuard Ensemble (k-mer+ESM-2) — Full"),
         ("blast_short",          "BLAST — Short (<150bp)"),
         ("dna_short",            "funcscreen DNABERT-2 — Short"),
         ("kmer_short_specialist","SynthGuard Short-Seq Specialist"),
@@ -491,6 +510,7 @@ def main():
         ("dna_ai",               "funcscreen DNABERT-2 — AI Variants"),
         ("kmer_ai",              "SynthGuard k-mer — AI Variants"),
         ("esm2_ai",              "funcscreen ESM-2 — AI Variants (protein)"),
+        ("ensemble_ai",          "SynthGuard Ensemble — AI Variants"),
     ]
     for key, label in rows:
         m = ALL.get(key)
