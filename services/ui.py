@@ -23,6 +23,17 @@ def apply_page_style() -> None:
                 --bl-shadow: 0 18px 48px rgba(23, 38, 56, 0.08);
             }
 
+            @media (prefers-color-scheme: dark) {
+                :root {
+                    --bl-ink: #e0e6ed;
+                    --bl-muted: #8899a6;
+                    --bl-panel: rgba(23, 33, 43, 0.9);
+                    --bl-panel-strong: rgba(30, 42, 56, 0.92);
+                    --bl-border: rgba(255, 255, 255, 0.08);
+                    --bl-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
+                }
+            }
+
             html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
                 background:
                     radial-gradient(circle at top left, rgba(205, 173, 122, 0.18), transparent 34%),
@@ -41,6 +52,18 @@ def apply_page_style() -> None:
                 background:
                     linear-gradient(180deg, rgba(253, 249, 242, 0.98), rgba(239, 246, 252, 0.96));
                 border-right: 1px solid var(--bl-border);
+            }
+
+            @media (prefers-color-scheme: dark) {
+                html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+                    background:
+                        radial-gradient(circle at top left, rgba(100, 140, 180, 0.1), transparent 34%),
+                        linear-gradient(180deg, #0e141a 0%, #151e27 48%, #1a242f 100%);
+                }
+                [data-testid="stSidebar"] {
+                    background:
+                        linear-gradient(180deg, rgba(18, 26, 33, 0.98), rgba(22, 31, 41, 0.96));
+                }
             }
 
             .block-container {
