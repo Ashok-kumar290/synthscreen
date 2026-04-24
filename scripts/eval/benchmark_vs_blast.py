@@ -35,39 +35,60 @@ from sklearn.metrics import (
 
 
 def load_model(model_dir: str, model_type: str, base_model_id: Optional[str] = None):
-    """Load a fine-tuned SynthScreen model."""
+    """
+    Load a fine-tuned SynthScreen model.
+    Prefers the merged/ subdirectory (adapter baked in, no PEFT dependency)
+    so DNABERT-2's custom config class conflict is avoided entirely.
+    """
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # Prefer merged model: adapter baked in, loads as plain BERT
+    merged_dir = os.path.join(model_dir, "merged")
+    if not os.path.exists(merged_dir):
+        # Also check parent's merged dir (if model_dir is already "best/")
+        merged_dir = os.path.join(os.path.dirname(model_dir), "merged")
+
+    if os.path.exists(merged_dir) and os.path.exists(os.path.join(merged_dir, "config.json")):
+        print(f"Loading merged model from: {merged_dir}")
+        tok_src = merged_dir if os.path.exists(os.path.join(merged_dir, "tokenizer_config.json")) else (
+            base_model_id or ("zhihan1996/DNABERT-2-117M" if model_type == "dnabert2"
+                              else "facebook/esm2_t33_650M_UR50D")
+        )
+        tokenizer = AutoTokenizer.from_pretrained(tok_src, trust_remote_code=True)
+        # Merged model has auto_map stripped → loads as standard BERT, no remote code
+        model = AutoModelForSequenceClassification.from_pretrained(merged_dir)
+        model = model.to(device)
+        model.eval()
+        print(f"Merged model loaded on {device}")
+        return model, tokenizer, device
+
+    # Fallback: PEFT adapter loading (may fail for DNABERT-2 on some transformers versions)
+    print(f"Merged model not found, loading PEFT adapter from: {model_dir}")
     if base_model_id is None:
         cfg_path = os.path.join(model_dir, "adapter_config.json")
         if os.path.exists(cfg_path):
             with open(cfg_path) as f:
-                peft_cfg = json.load(f)
-            base_model_id = peft_cfg.get("base_model_name_or_path")
-
+                base_model_id = json.load(f).get("base_model_name_or_path")
     if base_model_id is None:
-        default_ids = {
-            "esm2": "facebook/esm2_t33_650M_UR50D",
-            "dnabert2": "zhihan1996/DNABERT-2-117M",
-        }
-        base_model_id = default_ids[model_type]
+        base_model_id = ("zhihan1996/DNABERT-2-117M" if model_type == "dnabert2"
+                         else "facebook/esm2_t33_650M_UR50D")
 
-    print(f"Loading base model: {base_model_id}")
     tokenizer = AutoTokenizer.from_pretrained(base_model_id, trust_remote_code=True)
 
     if model_type == "dnabert2":
-        base = AutoModelForSequenceClassification.from_pretrained(
-            base_model_id,
-            num_labels=2,
-            trust_remote_code=True,
-            ignore_mismatched_sizes=True,
-        )
+        cfg = AutoConfig.from_pretrained(base_model_id, num_labels=2, trust_remote_code=True)
+        cfg.pad_token_id = tokenizer.pad_token_id or 0
+        with torch.device("cpu"):
+            base = AutoModelForSequenceClassification.from_pretrained(
+                base_model_id, config=cfg, trust_remote_code=True,
+                low_cpu_mem_usage=False, device_map=None,
+            )
     else:
         base = AutoModelForSequenceClassification.from_pretrained(base_model_id, num_labels=2)
 
-    model = PeftModel.from_pretrained(base, model_dir)
+    model = PeftModel.from_pretrained(base, model_dir).to(device)
     model.eval()
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = model.to(device)
-    print(f"Model loaded on {device}")
+    print(f"PEFT model loaded on {device}")
     return model, tokenizer, device
 
 

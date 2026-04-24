@@ -379,18 +379,31 @@ def main():
     print(f"Test Recall:    {m['test_recall']:.4f}")
     print(f"Test AUROC:     {m['test_auroc']:.4f}")
 
-    # Save final model
-    final_dir = os.path.join(config["output_dir"], "peft_final")
-    os.makedirs(final_dir, exist_ok=True)
-    state = {k: v.cpu() for k, v in model.state_dict().items()}
-    torch.save(state, os.path.join(final_dir, "model_state_dict.pt"))
-    model.save_pretrained(os.path.join(config["output_dir"], "best"))
+    # Save PEFT adapter
+    best_dir = os.path.join(config["output_dir"], "best")
+    model.save_pretrained(best_dir)
+    tokenizer.save_pretrained(best_dir)
+
+    # Save merged model (adapter baked in, no PEFT dependency at inference)
+    merged_dir = os.path.join(config["output_dir"], "merged")
+    os.makedirs(merged_dir, exist_ok=True)
+    try:
+        merged = model.merge_and_unload()
+        if hasattr(merged.config, "auto_map"):
+            del merged.config.auto_map
+        merged.save_pretrained(merged_dir)
+        tokenizer.save_pretrained(merged_dir)
+        print(f"Merged model saved to: {merged_dir}")
+    except Exception as e:
+        print(f"Merged save skipped: {e}")
 
     results = {
         "config": config,
         "model_id": model_id,
         "test_metrics": {k.replace("test_", ""): round(v, 4) for k, v in m.items()},
     }
+    final_dir = os.path.join(config["output_dir"], "peft_final")
+    os.makedirs(final_dir, exist_ok=True)
     with open(os.path.join(final_dir, "training_results.json"), "w") as f:
         json.dump(results, f, indent=2)
 
