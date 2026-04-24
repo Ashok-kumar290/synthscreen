@@ -35,9 +35,91 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Feature extraction (must match notebook) ─────────────────────────────────
+# ── Feature extraction (must match training pipeline) ─────────────────────────
 
 VOCAB = {k: ["".join(p) for p in product("ACGT", repeat=k)] for k in [3, 4, 5, 6]}
+
+CODON_TABLE = {
+    'TTT':'F','TTC':'F','TTA':'L','TTG':'L','CTT':'L','CTC':'L','CTA':'L','CTG':'L',
+    'ATT':'I','ATC':'I','ATA':'I','ATG':'M','GTT':'V','GTC':'V','GTA':'V','GTG':'V',
+    'TCT':'S','TCC':'S','TCA':'S','TCG':'S','CCT':'P','CCC':'P','CCA':'P','CCG':'P',
+    'ACT':'T','ACC':'T','ACA':'T','ACG':'T','GCT':'A','GCC':'A','GCA':'A','GCG':'A',
+    'TAT':'Y','TAC':'Y','TAA':'*','TAG':'*','CAT':'H','CAC':'H','CAA':'Q','CAG':'Q',
+    'AAT':'N','AAC':'N','AAA':'K','AAG':'K','GAT':'D','GAC':'D','GAA':'E','GAG':'E',
+    'TGT':'C','TGC':'C','TGA':'*','TGG':'W','CGT':'R','CGC':'R','CGA':'R','CGG':'R',
+    'AGT':'S','AGC':'S','AGA':'R','AGG':'R','GGT':'G','GGC':'G','GGA':'G','GGG':'G',
+}
+
+_AA_CODONS: dict = {}
+for _c, _a in CODON_TABLE.items():
+    _AA_CODONS.setdefault(_a, []).append(_c)
+
+ALL_CODONS = sorted(CODON_TABLE.keys())
+AMINO_ACIDS = sorted(a for a in set(CODON_TABLE.values()) if a != '*')
+
+# Codon frequencies per thousand (Kazusa DB) for CAI computation
+_ECOLI = {'TTT':22.0,'TTC':16.5,'TTA':13.9,'TTG':13.1,'CTT':10.9,'CTC':10.0,'CTA':3.8,'CTG':52.7,'ATT':28.8,'ATC':25.1,'ATA':4.4,'ATG':27.4,'GTT':19.5,'GTC':14.7,'GTA':10.8,'GTG':25.9,'TCT':7.8,'TCC':8.8,'TCA':7.0,'TCG':8.7,'CCT':7.2,'CCC':5.6,'CCA':8.4,'CCG':23.3,'ACT':9.0,'ACC':23.4,'ACA':7.2,'ACG':14.6,'GCT':15.3,'GCC':25.8,'GCA':20.6,'GCG':33.5,'TAT':16.3,'TAC':12.5,'TAA':2.0,'TAG':0.3,'CAT':13.2,'CAC':9.6,'CAA':15.5,'CAG':28.7,'AAT':22.3,'AAC':22.4,'AAA':33.6,'AAG':10.1,'GAT':32.2,'GAC':19.0,'GAA':39.8,'GAG':18.3,'TGT':5.0,'TGC':6.5,'TGA':1.0,'TGG':15.2,'CGT':21.1,'CGC':21.7,'CGA':3.7,'CGG':5.3,'AGT':8.7,'AGC':15.8,'AGA':3.5,'AGG':2.9,'GGT':24.7,'GGC':29.5,'GGA':8.0,'GGG':11.5}
+_HUMAN  = {'TTT':17.6,'TTC':20.3,'TTA':7.7,'TTG':12.9,'CTT':13.2,'CTC':19.6,'CTA':7.2,'CTG':39.6,'ATT':16.0,'ATC':20.8,'ATA':7.5,'ATG':22.0,'GTT':11.0,'GTC':14.5,'GTA':7.1,'GTG':28.1,'TCT':15.2,'TCC':17.7,'TCA':12.2,'TCG':4.4,'CCT':17.5,'CCC':19.8,'CCA':16.9,'CCG':6.9,'ACT':13.1,'ACC':18.9,'ACA':15.1,'ACG':6.1,'GCT':18.4,'GCC':27.7,'GCA':15.8,'GCG':7.4,'TAT':12.2,'TAC':15.3,'TAA':1.0,'TAG':0.8,'CAT':10.9,'CAC':15.1,'CAA':12.3,'CAG':34.2,'AAT':17.0,'AAC':19.1,'AAA':24.4,'AAG':31.9,'GAT':21.8,'GAC':25.1,'GAA':29.0,'GAG':39.6,'TGT':10.6,'TGC':12.6,'TGA':1.6,'TGG':13.2,'CGT':4.5,'CGC':10.4,'CGA':6.2,'CGG':11.4,'AGT':15.2,'AGC':19.5,'AGA':11.5,'AGG':11.4,'GGT':10.8,'GGC':22.2,'GGA':16.5,'GGG':16.5}
+_YEAST  = {'TTT':26.2,'TTC':18.4,'TTA':26.2,'TTG':27.2,'CTT':12.3,'CTC':5.4,'CTA':13.4,'CTG':10.5,'ATT':30.1,'ATC':17.2,'ATA':17.8,'ATG':20.9,'GTT':22.1,'GTC':11.8,'GTA':11.8,'GTG':10.8,'TCT':23.5,'TCC':14.2,'TCA':18.7,'TCG':8.6,'CCT':13.5,'CCC':6.8,'CCA':18.3,'CCG':5.4,'ACT':20.3,'ACC':13.1,'ACA':17.9,'ACG':8.1,'GCT':21.1,'GCC':12.6,'GCA':16.0,'GCG':6.2,'TAT':18.8,'TAC':14.8,'TAA':1.1,'TAG':0.5,'CAT':13.6,'CAC':7.8,'CAA':27.3,'CAG':12.1,'AAT':35.9,'AAC':24.8,'AAA':41.9,'AAG':30.8,'GAT':37.6,'GAC':20.2,'GAA':45.0,'GAG':19.2,'TGT':8.1,'TGC':4.8,'TGA':0.7,'TGG':10.4,'CGT':6.4,'CGC':2.6,'CGA':3.0,'CGG':1.7,'AGT':14.2,'AGC':9.8,'AGA':21.3,'AGG':9.2,'GGT':23.9,'GGC':9.8,'GGA':10.9,'GGG':6.0}
+
+def _ref_rscu(freq_table: dict) -> dict:
+    rscu = {}
+    for aa, codons in _AA_CODONS.items():
+        if aa == '*':
+            for c in codons: rscu[c] = 1.0
+            continue
+        max_f = max(freq_table.get(c, 0.1) for c in codons)
+        for c in codons:
+            rscu[c] = freq_table.get(c, 0.1) / max_f if max_f > 0 else 1.0
+    return rscu
+
+_ECOLI_RSCU = _ref_rscu(_ECOLI)
+_HUMAN_RSCU = _ref_rscu(_HUMAN)
+_YEAST_RSCU = _ref_rscu(_YEAST)
+
+
+def _codon_features(seq: str) -> list[float]:
+    """RSCU (64) + CAI×3 (3) + AA composition (20) = 87 features."""
+    # In-frame codon counts (frame 0)
+    codon_cnt: Counter = Counter()
+    for i in range(0, len(seq) - 2, 3):
+        cdn = seq[i:i+3]
+        if len(cdn) == 3 and cdn in CODON_TABLE:
+            codon_cnt[cdn] += 1
+
+    # RSCU for all 64 codons
+    rscu_vals: dict = {}
+    for aa, codons in _AA_CODONS.items():
+        if aa == '*':
+            for c in codons: rscu_vals[c] = 1.0
+            continue
+        aa_total = sum(codon_cnt.get(c, 0) for c in codons)
+        n_syn = len(codons)
+        expected = aa_total / n_syn if aa_total > 0 else 0
+        for c in codons:
+            rscu_vals[c] = codon_cnt.get(c, 0) / expected if expected > 0 else 1.0
+    rscu_feats = [rscu_vals.get(c, 1.0) for c in ALL_CODONS]
+
+    # CAI against 3 reference organisms
+    def cai(ref_rscu: dict) -> float:
+        log_sum, count = 0.0, 0
+        for cdn, n in codon_cnt.items():
+            if CODON_TABLE.get(cdn, '*') != '*':
+                log_sum += math.log(max(ref_rscu.get(cdn, 0.01), 1e-6)) * n
+                count += n
+        return math.exp(log_sum / count) if count > 0 else 0.5
+    cai_feats = [cai(_ECOLI_RSCU), cai(_HUMAN_RSCU), cai(_YEAST_RSCU)]
+
+    # Amino acid composition (20 features)
+    aa_total = sum(n for cdn, n in codon_cnt.items() if CODON_TABLE.get(cdn, '*') != '*')
+    aa_cnt: Counter = Counter()
+    for cdn, n in codon_cnt.items():
+        aa = CODON_TABLE.get(cdn, '*')
+        if aa != '*':
+            aa_cnt[aa] += n
+    aa_feats = [aa_cnt.get(aa, 0) / max(aa_total, 1) for aa in AMINO_ACIDS]
+
+    return rscu_feats + cai_feats + aa_feats
 
 
 def extract_features(seq: str) -> list[float]:
@@ -58,6 +140,7 @@ def extract_features(seq: str) -> list[float]:
         kmer_cnt = Counter(seq[i : i + k] for i in range(n - k + 1))
         total_k = max(n - k + 1, 1)
         feats.extend(kmer_cnt.get(km, 0) / total_k for km in VOCAB[k])
+    feats.extend(_codon_features(seq))
     return feats
 
 
