@@ -126,6 +126,7 @@ def show(name, m):
     print(f"  Recall={m['recall']:.3f}  Precision={m['precision']:.3f}  "
           f"F1={m['f1']:.3f}  AUROC={m['auroc']:.3f}  FPR={m['fpr']:.3f}")
     print(f"  TP={m['tp']}  FP={m['fp']}  TN={m['tn']}  FN={m['fn']}")
+    return m
 
 # ── k-mer features ────────────────────────────────────────────────────────────
 
