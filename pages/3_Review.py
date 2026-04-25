@@ -67,7 +67,7 @@ export_record = build_export_dataset([selected_id])
 
 st.markdown(render_verdict_strip(case).replace("\n", " "), unsafe_allow_html=True)
 
-header_cols = st.columns(2)
+header_cols = st.columns(2, gap="large")
 with header_cols[0]:
     render_metric_card("Submitted", format_timestamp(case["submitted_at"]), case["sequence_type"])
 with header_cols[1]:
@@ -101,7 +101,7 @@ with detail_col:
             render_threat_radar(case["threat_breakdown"], height=260)
         with col2:
             st.markdown("#### Structured Assessment")
-            render_threat_bars(case["threat_breakdown"])
+            render_threat_bars(case["threat_breakdown"], top_margin="4.5rem")
 
         st.markdown("#### Primary Risk Drivers")
         render_primary_risk_drivers(case["threat_breakdown"])

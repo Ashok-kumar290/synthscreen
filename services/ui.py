@@ -170,10 +170,15 @@ def apply_page_style() -> None:
                 border-radius: 22px;
                 box-shadow: 0 20px 56px rgba(10, 28, 48, 0.26);
                 color: #eef5fc;
-                margin: 0 0.5rem 1.4rem;
-                padding: 2.6rem 2.4rem 2.9rem;
+                margin: 0 0 1.4rem 0 !important;
+                padding: 2.6rem 2.4rem 2.9rem !important;
                 position: relative;
                 overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                width: 100% !important;
+                box-sizing: border-box !important;
             }
 
             .bl-hero::after {
@@ -186,19 +191,24 @@ def apply_page_style() -> None:
                 letter-spacing: 0.16em;
                 margin-bottom: 0.6rem;
                 text-transform: uppercase;
+                margin-left: 0 !important;
+                padding-left: 0 !important;
             }
 
             .bl-hero h1 {
                 color: #f0f8ff;
                 font-size: 2.4rem;
-                margin: 0 0 0.5rem 0;
+                margin: 0 0 0.5rem 0 !important;
+                padding: 0 !important;
                 letter-spacing: -0.025em;
+                line-height: 1.1;
             }
 
             .bl-hero p {
                 color: rgba(224, 240, 255, 0.82);
-                line-height: 1.65;
-                margin: 0;
+                line-height: 1.6;
+                margin: 0 !important;
+                padding: 0 !important;
                 max-width: 740px;
                 font-size: 1.01rem;
             }
@@ -216,9 +226,12 @@ def apply_page_style() -> None:
 
             .bl-case-card {
                 cursor: pointer;
-                margin-bottom: 1rem;
-                padding: 1.05rem 1.15rem;
+                margin-top: 1.5rem; /* Prevent overlap with metric cards */
+                margin-bottom: 1.5rem;
+                padding: 1.4rem 1.6rem;
                 transition: box-shadow 0.15s, transform 0.15s;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             .bl-case-card:hover {
@@ -227,11 +240,11 @@ def apply_page_style() -> None:
             }
 
             .bl-case-row {
-                align-items: flex-start;
+                align-items: center; /* Better alignment for title and badges */
                 display: flex;
                 gap: 1rem;
                 justify-content: space-between;
-                margin-bottom: 0.5rem;
+                margin-bottom: 1rem;
             }
 
             .bl-case-title {
@@ -287,8 +300,14 @@ def apply_page_style() -> None:
             }
 
             .bl-metric-card {
-                min-height: 132px;
-                padding: 1rem 1rem 0.9rem;
+                min-height: 140px;
+                padding: 1.4rem 1.6rem;
+                width: 100%;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                margin-bottom: 1rem;
             }
 
             .bl-metric-label {
@@ -583,40 +602,10 @@ def render_hero(title: str, subtitle: str, mode_label: str, compact: bool = Fals
     mode_icon = "🟢" if display_label == "Online" else "🔵"
 
     if compact:
-        html_str = f"""
-<div style="
-    background: linear-gradient(135deg, #0a1c30 0%, #0e3554 55%, #113f65 100%);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 16px;
-    padding: 0.9rem 1.5rem;
-    margin: 0 0.5rem 1.2rem;
-    display: flex;
-    align-items: center;
-    gap: 1.2rem;
-    box-shadow: 0 8px 28px rgba(10, 28, 48, 0.2);
-">
-    <div style="flex: 1; min-width: 0;">
-        <div style="color: rgba(224,240,255,0.6); font-size: 0.72rem; letter-spacing: 0.14em;
-                    text-transform: uppercase; margin-bottom: 0.22rem;">
-            BioLens · {html.escape(display_label)} mode
-        </div>
-        <div style="color: #f0f8ff; font-size: 1.32rem; font-weight: 700;
-                    font-family: 'Iowan Old Style', 'Palatino Linotype', serif; letter-spacing: -0.02em;">
-            {html.escape(title)}
-        </div>
-    </div>
-    <div style="font-size: 1.5rem; flex-shrink: 0; opacity: 0.75;">{mode_icon}</div>
-</div>
-"""
+        html_str = f"""<div style="background: linear-gradient(135deg, #0a1c30 0%, #0e3554 55%, #113f65 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 0.9rem 1.5rem; margin: 0 0 1.2rem 0; display: flex; align-items: center; gap: 1.2rem; box-shadow: 0 8px 28px rgba(10, 28, 48, 0.2);"><div style="flex: 1; min-width: 0;"><div style="color: rgba(224,240,255,0.6); font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 0.22rem;">BioLens · {html.escape(display_label)} mode</div><div style="color: #f0f8ff; font-size: 1.32rem; font-weight: 700; font-family: 'Iowan Old Style', 'Palatino Linotype', serif; letter-spacing: -0.02em;">{html.escape(title)}</div></div><div style="font-size: 1.5rem; flex-shrink: 0; opacity: 0.75;">{mode_icon}</div></div>"""
     else:
-        html_str = f"""
-<section class="bl-hero">
-<div class="bl-eyebrow">BioLens • {html.escape(display_label)} mode</div>
-<h1>{html.escape(title)}</h1>
-<p>{html.escape(subtitle)}</p>
-</section>
-"""
-    st.markdown(html_str.replace("\n", " "), unsafe_allow_html=True)
+        html_str = f"""<div class="bl-hero"><div class="bl-eyebrow">BioLens • {html.escape(display_label)} mode</div><h1>{html.escape(title)}</h1><p>{html.escape(subtitle)}</p></div>"""
+    st.markdown(html_str, unsafe_allow_html=True)
 
 
 def render_metric_card(label: str, value: str, detail: str) -> None:
@@ -683,10 +672,13 @@ def render_threat_radar(breakdown: dict[str, Any] | None, height: int = 320) -> 
         plot_bgcolor='rgba(0,0,0,0)',
         font=dict(color=_fc),
         showlegend=False,
-        margin=dict(l=20, r=20, t=20, b=20),
+        margin=dict(l=60, r=60, t=20, b=10), # Added some top margin back
         height=height,
     )
-    st.plotly_chart(fig, width="stretch")
+    # Align with 'Evasion Potential' line (approximately 2nd line of assessment)
+    st.markdown('<div style="margin-top: 1.2rem; margin-bottom: 0;">', unsafe_allow_html=True)
+    st.plotly_chart(fig, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def render_attributed_sequence(sequence: str, attribution_data: dict[str, Any] | None) -> None:
@@ -819,7 +811,7 @@ def render_verdict_strip(result: dict[str, Any]) -> str:
 </div>
     """
 
-def render_threat_bars(breakdown: dict[str, Any] | None) -> None:
+def render_threat_bars(breakdown: dict[str, Any] | None, top_margin: str = "1.2rem") -> None:
     if not breakdown:
         st.info("No structured threat breakdown available.")
         return
@@ -846,7 +838,7 @@ def render_threat_bars(breakdown: dict[str, Any] | None) -> None:
 </div>
         """)
         
-    st.markdown("".join(html_parts), unsafe_allow_html=True)
+    st.markdown(f'<div style="margin-top: {html.escape(top_margin)};">{"".join(html_parts)}</div>', unsafe_allow_html=True)
 
 def render_error_card(title: str, detail: str) -> None:
     html_str = f"""
