@@ -361,28 +361,34 @@ MODEL_DIR = Path(os.environ.get("SYNTHGUARD_MODEL_DIR", "models/synthguard_kmer"
 
 _general_model = None
 _short_model = None
+_protein_model = None
 _meta = None
 
 
 def _load_models():
-    global _general_model, _short_model, _meta
+    global _general_model, _short_model, _protein_model, _meta
     if _general_model is not None:
         return
 
     general_path = MODEL_DIR / "general_model.pkl"
-    short_path = MODEL_DIR / "short_model.pkl"
-    meta_path = MODEL_DIR / "meta.json"
+    short_path   = MODEL_DIR / "short_model.pkl"
+    protein_path = MODEL_DIR / "protein_kmer_model.pkl"
+    meta_path    = MODEL_DIR / "meta.json"
 
     if not general_path.exists():
         raise RuntimeError(
             f"Models not found at {MODEL_DIR}. "
-            "Run notebooks/synthguard_full.ipynb first to train and save models."
+            "Run the training pipeline first to save models."
         )
 
     with open(general_path, "rb") as f:
         _general_model = pickle.load(f)
     with open(short_path, "rb") as f:
         _short_model = pickle.load(f)
+    if protein_path.exists():
+        with open(protein_path, "rb") as f:
+            _protein_model = pickle.load(f)
+        print("  Protein k-mer model loaded.")
     with open(meta_path) as f:
         _meta = json.load(f)
 
@@ -394,6 +400,58 @@ async def startup():
         print(f"SynthGuard models loaded from {MODEL_DIR}")
     except RuntimeError as e:
         print(f"WARNING: {e}\nAPI will return errors until models are loaded.")
+
+
+# ── Protein feature extraction ────────────────────────────────────────────────
+
+_AA20 = list("ACDEFGHIKLMNPQRSTVWY")
+_AA_PAIRS = [a+b for a in _AA20 for b in _AA20]
+_HYDRO = {'A':1.8,'R':-4.5,'N':-3.5,'D':-3.5,'C':2.5,'Q':-3.5,'E':-3.5,'G':-0.4,
+          'H':-3.2,'I':4.5,'L':3.8,'K':-3.9,'M':1.9,'F':2.8,'P':-1.6,'S':-0.8,
+          'T':-0.7,'W':-0.9,'Y':-1.3,'V':4.2}
+_CHARGE = {'R':1,'K':1,'D':-1,'E':-1,'H':0.1}
+_MW     = {'A':89,'R':174,'N':132,'D':133,'C':121,'Q':146,'E':147,'G':75,'H':155,
+           'I':131,'L':131,'K':146,'M':149,'F':165,'P':115,'S':105,'T':119,
+           'W':204,'Y':181,'V':117}
+
+def _translate_best_frame(dna: str) -> str:
+    dna = dna.upper()
+    best = ""
+    for frame in range(3):
+        aa = "".join(CODON_TABLE.get(dna[i:i+3], "X") for i in range(frame, len(dna)-2, 3))
+        if "*" in aa: aa = aa[:aa.index("*")]
+        if len(aa) > len(best): best = aa
+    return best
+
+def _protein_features(aa: str) -> list:
+    aa = "".join(c for c in aa.upper() if c in set(_AA20))
+    if not aa: return [0.0] * (20 + 400 + 6)
+    n = max(len(aa), 1)
+    cnt1 = Counter(aa)
+    cnt2 = Counter(aa[i:i+2] for i in range(n-1))
+    comp  = [cnt1.get(a, 0)/n for a in _AA20]
+    dipep = [cnt2.get(p, 0)/max(n-1,1) for p in _AA_PAIRS]
+    hydro  = sum(_HYDRO.get(c, 0) for c in aa) / n
+    charge = sum(_CHARGE.get(c, 0) for c in aa) / n
+    mw_avg = sum(_MW.get(c, 110) for c in aa) / n
+    entropy = -sum((v/n)*math.log2(v/n) for v in cnt1.values() if v > 0)
+    f_charged = sum(1 for c in aa if _CHARGE.get(c, 0) != 0) / n
+    f_hydro   = sum(1 for c in aa if _HYDRO.get(c, 0) > 1.0) / n
+    return comp + dipep + [hydro, charge, mw_avg, entropy, f_charged, f_hydro]
+
+def _screen_protein(aa: str, threshold_review=0.3, threshold_escalate=0.6) -> dict:
+    _load_models()
+    if _protein_model is None:
+        return {"error": "protein_model_not_loaded", "risk_score": None, "decision": None}
+    import numpy as np
+    feats = np.array([_protein_features(aa)])
+    prob = float(_protein_model.predict_proba(feats)[0, 1])
+    if prob >= threshold_escalate:   decision = "ESCALATE"
+    elif prob >= threshold_review:   decision = "REVIEW"
+    else:                            decision = "ALLOW"
+    return {"risk_score": round(prob, 4), "decision": decision,
+            "sequence_length": len(aa), "sequence_type": "PROTEIN",
+            "model_used": "protein-kmer"}
 
 
 # ── Request / Response schemas ────────────────────────────────────────────────
@@ -513,11 +571,48 @@ async def screen_sequence(req: ScreenRequest):
     try:
         seq = req.sequence.upper().replace("U", "T").strip()
         if _is_protein(seq):
-            raise HTTPException(status_code=422, detail="protein_not_supported: submit coding DNA sequence")
+            raise HTTPException(status_code=422, detail="protein_not_supported: use /protein/screen for amino acid sequences")
         if not _is_valid_dna(seq):
             raise HTTPException(status_code=422, detail="invalid_sequence: not a valid DNA sequence")
         result = _screen_one(req.sequence, req.threshold_review, req.threshold_escalate)
         return ScreenResponse(**result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ProteinScreenRequest(BaseModel):
+    sequence: str = Field(..., description="Amino acid sequence (single-letter codes) or coding DNA")
+    threshold_review: float = Field(0.3, ge=0.0, le=1.0)
+    threshold_escalate: float = Field(0.6, ge=0.0, le=1.0)
+
+
+@app.post("/protein/screen", tags=["protein"])
+async def screen_protein_sequence(req: ProteinScreenRequest):
+    """Screen a protein (amino acid) sequence for biosecurity hazards.
+
+    Accepts either amino acid sequences directly or coding DNA (auto-translated
+    to best reading frame). Uses SynthGuard protein k-mer model (AUROC 0.937).
+    For reference: SynthGuard ESM-2 650M available at Seyomi/synthguard-esm2.
+    """
+    try:
+        seq = req.sequence.upper().strip()
+        # If DNA submitted, translate first
+        if _is_valid_dna(seq) and not _is_protein(seq):
+            aa = _translate_best_frame(seq)
+            source = "translated_from_dna"
+        else:
+            aa = "".join(c for c in seq if c in set(_AA20))
+            source = "protein_direct"
+
+        if len(aa) < 10:
+            raise HTTPException(status_code=400, detail="Sequence too short (<10aa after translation)")
+
+        result = _screen_protein(aa, req.threshold_review, req.threshold_escalate)
+        result["source"] = source
+        result["amino_acid_length"] = len(aa)
+        return result
     except HTTPException:
         raise
     except Exception as e:
@@ -634,13 +729,40 @@ async def biolens_screen(req: BioLensRequest):
         seq = req.sequence.upper().replace("U", "T").strip()
         seq_type = req.seq_type.upper() if req.seq_type.upper() in ("DNA", "PROTEIN") else "DNA"
 
-        # Detect protein from sequence content regardless of what the client declares
+        # Route protein sequences to protein k-mer model
         if seq_type == "PROTEIN" or _is_protein(seq):
-            return {"ok": False, "hazard_score": None, "risk_level": None,
-                    "confidence": None, "category": None,
-                    "explanation": "SynthGuard is a DNA-only screener. Protein sequences are not supported — please submit the coding DNA sequence instead.",
-                    "baseline_result": None, "model_name": "synthguard-kmer",
-                    "error": "protein_not_supported"}
+            aa = "".join(c for c in seq if c in set(_AA20))
+            if len(aa) < 10:
+                return {"ok": False, "hazard_score": None, "risk_level": None,
+                        "confidence": None, "category": None, "explanation": None,
+                        "baseline_result": None, "model_name": "synthguard-protein-kmer",
+                        "error": "sequence_too_short"}
+            prot_result = _screen_protein(aa)
+            if prot_result.get("error"):
+                return {"ok": False, "hazard_score": None, "risk_level": None,
+                        "confidence": None, "category": None, "explanation": None,
+                        "baseline_result": None, "model_name": "synthguard-protein-kmer",
+                        "error": prot_result["error"]}
+            prob = prot_result["risk_score"]
+            decision = prot_result["decision"]
+            risk_map = {"ALLOW": "SAFE", "REVIEW": "REVIEW", "ESCALATE": "HIGH"}
+            risk_level = risk_map[decision]
+            return {
+                "ok": True,
+                "hazard_score": prob,
+                "risk_level": risk_level,
+                "confidence": round(min(max(abs(prob - 0.5) * 2 + 0.5, 0.5), 0.99), 3),
+                "category": _pick_category("PROTEIN", risk_level, aa),
+                "explanation": f"SynthGuard protein k-mer screening (score {prob:.2f}). "
+                               + ("Hazardous protein signature detected." if risk_level == "HIGH"
+                                  else "Ambiguous protein profile — analyst review recommended." if risk_level == "REVIEW"
+                                  else "No hazard signal detected at protein level."),
+                "baseline_result": "Protein screened via amino acid k-mer model (AUROC 0.937). ESM-2 reference model available at Seyomi/synthguard-esm2.",
+                "model_name": "synthguard-protein-kmer",
+                "error": None,
+                "threat_breakdown": _build_threat_breakdown(aa, prob),
+                "attribution_data": _build_attribution(aa),
+            }
 
         # Reject random/garbage input that isn't DNA or protein
         if not _is_valid_dna(seq):
