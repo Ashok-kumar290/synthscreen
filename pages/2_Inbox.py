@@ -7,6 +7,7 @@ from services.constants import ANALYST_STATUSES, RISK_LEVELS
 from services.sidebar import render_global_sidebar
 from services.export import build_export_dataset, export_filename, export_screenings_csv, export_screenings_json
 from services.storage import list_screenings
+from services.intelligence import get_case_intelligence
 from services.ui import (
     apply_page_style,
     format_timestamp,
@@ -43,6 +44,7 @@ filters_col, export_col = st.columns([1.2, 0.8], gap="large")
 with filters_col:
     selected_statuses = st.multiselect("Analyst status", ANALYST_STATUSES, default=default_statuses)
     selected_risks = st.multiselect("Risk tier", RISK_LEVELS, default=[])
+    intel_only = st.checkbox("⚡ Has Intel Context", value=False, help="Show only cases linked to intelligence alerts")
 
 with export_col:
     sort_choice = st.selectbox(
@@ -65,6 +67,21 @@ cases = list_screenings(
     sort_by=sort_by,
     descending=descending,
 )
+
+# Build intel lookup if needed
+if intel_only:
+    intel_case_ids = set()
+    for case in cases:
+        links = get_case_intelligence(case["id"])
+        if links:
+            intel_case_ids.add(case["id"])
+    cases = [c for c in cases if c["id"] in intel_case_ids]
+
+# Pre-fetch intel links for badge rendering (only first 50 to avoid slowdown)
+_intel_flag_ids: set[str] = set()
+for case in cases[:50]:
+    if get_case_intelligence(case["id"]):
+        _intel_flag_ids.add(case["id"])
 
 filtered_export = build_export_dataset([case["id"] for case in cases])
 
@@ -136,6 +153,12 @@ else:
         card_col, action_col = st.columns([1.0, 0.24], gap="medium")
         with card_col:
             sequence_preview = f"{case['sequence_text'][:72]}..." if len(case["sequence_text"]) > 72 else case["sequence_text"]
+            has_intel = case["id"] in _intel_flag_ids
+            intel_badge_html = (
+                '<span style="background:#fff8e1; border:1px solid #f39c12; border-radius:999px; '
+                'font-size:0.72rem; font-weight:700; padding:0.15rem 0.55rem; color:#8a4c00;">⚡ INTEL</span>'
+                if has_intel else ""
+            )
             st.markdown(
                 f"""
 <div class="bl-case-card">
@@ -147,6 +170,7 @@ else:
 <div class="bl-badge-row">
                             {risk_badge(case['risk_level'])}
                             {status_badge(case['analyst_status'])}
+                            {intel_badge_html}
 </div>
 </div>
 <div class="bl-case-meta">Score {case['hazard_score']:.2f} • Confidence {case['confidence']:.2f}</div>

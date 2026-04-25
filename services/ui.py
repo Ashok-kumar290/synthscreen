@@ -424,11 +424,28 @@ def action_badge(action: str | None) -> str:
     style = ACTION_STYLES.get(action or "", {"bg": "#eef2f4", "fg": "#475865"})
     return _badge(action or "UNSET", style["bg"], style["fg"])
 
+def severity_badge(severity: str | None) -> str:
+    from services.constants import SEVERITY_STYLES
+    style = SEVERITY_STYLES.get(severity or "", {"bg": "#eef2f4", "fg": "#475865"})
+    return _badge(severity or "UNSET", style["bg"], style["fg"])
+
+def signal_type_badge(signal_type: str | None) -> str:
+    # Generic style for signal types
+    return _badge(signal_type or "UNKNOWN", "#eef2f4", "#475865")
+
 
 def render_hero(title: str, subtitle: str, mode_label: str) -> None:
+    # Map legacy or internal mode names to human-readable display labels
+    _mode_display = {
+        "online": "Online",
+        "offline": "Offline",
+        "integrated": "Online",  # legacy
+        "demo": "Offline",       # legacy
+    }
+    display_label = _mode_display.get(mode_label.lower(), mode_label.upper())
     html_str = f"""
 <section class="bl-hero">
-<div class="bl-eyebrow">BioLens • {html.escape(mode_label.upper())} mode</div>
+<div class="bl-eyebrow">BioLens • {html.escape(display_label)} mode</div>
 <h1>{html.escape(title)}</h1>
 <p>{html.escape(subtitle)}</p>
 </section>
@@ -583,14 +600,34 @@ def render_confidence_bar(confidence: float) -> str:
 def render_data_source_tag(data_source: str | None) -> str:
     ds = data_source or "unknown"
     style = DATA_SOURCE_STYLES.get(ds, {"bg": "#eef2f4", "fg": "#475865", "label": ds})
+
+    # Choose icon based on source type
+    if ds == "synthguard-api":
+        # Database/API icon
+        icon_svg = """<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+        </svg>"""
+    else:
+        # CPU/local icon
+        icon_svg = """<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+            <rect x="9" y="9" width="6" height="6"></rect>
+            <line x1="9" y1="1" x2="9" y2="4"></line>
+            <line x1="15" y1="1" x2="15" y2="4"></line>
+            <line x1="9" y1="20" x2="9" y2="23"></line>
+            <line x1="15" y1="20" x2="15" y2="23"></line>
+            <line x1="20" y1="9" x2="23" y2="9"></line>
+            <line x1="20" y1="14" x2="23" y2="14"></line>
+            <line x1="1" y1="9" x2="4" y2="9"></line>
+            <line x1="1" y1="14" x2="4" y2="14"></line>
+        </svg>"""
+
     return f"""
 <div class="bl-data-source-tag" style="background: {style['bg']}; color: {style['fg']}; border: 1px solid {style['fg']}33;">
-<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
-<path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
-<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
-</svg>
-        {style['label']}
+{icon_svg}
+    {style['label']}
 </div>
     """
 
@@ -706,3 +743,267 @@ def render_primary_risk_drivers(breakdown: dict[str, Any] | None) -> None:
         
     html_parts.append('</div>')
     st.markdown("".join(html_parts), unsafe_allow_html=True)
+
+
+def render_alert_card(alert: dict[str, Any]) -> None:
+    from services.constants import SEVERITY_STYLES
+    sev_color = SEVERITY_STYLES.get(alert.get("severity", "LOW"), {}).get("fg", "#475865")
+    
+    st.markdown(
+        f"""
+        <div class="bl-case-card" style="border-left: 4px solid {sev_color};">
+            <div class="bl-case-row">
+                <div>
+                    <div class="bl-case-title" style="color: {sev_color};">{html.escape(alert['title'])}</div>
+                    <div class="bl-case-meta">{html.escape(alert['source_type'])} • {html.escape(alert['source_name'])} • {html.escape(alert['region'])}</div>
+                </div>
+                <div class="bl-badge-row">
+                    {severity_badge(alert.get('severity'))}
+                    {signal_type_badge(alert.get('signal_type'))}
+                    {status_badge(alert.get('status'))}
+                </div>
+            </div>
+            <div style="font-size: 0.95rem; margin-top: 0.4rem; margin-bottom: 0.8rem;">{html.escape(alert['summary'])}</div>
+            <div style="font-size: 0.85rem; margin-bottom: 0.4rem;">
+                <strong>Confidence:</strong> {alert.get('confidence', 0)}%
+            </div>
+            <div style="background: rgba(15, 90, 133, 0.08); padding: 0.6rem; border-radius: 6px; font-size: 0.85rem; border-left: 3px solid var(--bl-accent); margin-bottom: 0.6rem;">
+                <strong>Screening Relevance:</strong> {html.escape(alert['screening_relevance'])}
+            </div>
+            <div style="font-size: 0.85rem; color: var(--bl-muted);"><strong>Suggested Action:</strong> {html.escape(alert['suggested_action'])}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+def render_intelligence_context_box(matches: list[dict[str, Any]]) -> None:
+    if not matches:
+        return
+        
+    html_parts = ['<div style="background: #fff8e1; border-left: 4px solid #f39c12; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; box-shadow: var(--bl-shadow);">']
+    html_parts.append('<div style="font-weight: 700; color: #d35400; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem;"><span>⚡</span> External Intelligence Context</div>')
+    
+    for match in matches:
+        priority = match.get("priority", "LOW")
+        priority_color = "#e74c3c" if priority == "HIGH" else "#f39c12" if priority == "MEDIUM" else "#3498db"
+        
+        html_parts.append(f"""
+            <div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(0,0,0,0.05);">
+                <div style="font-weight: 600; margin-bottom: 0.3rem;">Watchlist Match: {html.escape(match['keyword'])} ({html.escape(match['category'])})</div>
+                <div style="font-size: 0.85rem; color: {priority_color}; font-weight: 600; margin-bottom: 0.4rem;">Priority Impact: Review recommended ({priority} Priority)</div>
+                <div style="font-size: 0.9rem; color: var(--bl-ink); margin-bottom: 0.4rem;"><strong>Source Alert:</strong> [{html.escape(match['alert_id'])}] {html.escape(match['alert_title'])}</div>
+                <div style="font-size: 0.85rem; color: var(--bl-muted);"><em>Relevance: {html.escape(match['screening_relevance'])}</em></div>
+            </div>
+        """)
+        
+    html_parts.append('<div style="font-size: 0.8rem; color: var(--bl-muted); font-style: italic;">Note: This context flag is informational. Final decision remains with the analyst.</div>')
+    html_parts.append('</div>')
+    
+    st.markdown("".join(html_parts), unsafe_allow_html=True)
+
+
+# ── New Dashboard Components ───────────────────────────────────────────────────
+
+def render_threat_posture_banner(posture: dict[str, Any]) -> None:
+    """Full-width banner reflecting the current operational threat posture."""
+    from services.constants import THREAT_POSTURE_STYLES
+    level = posture.get("level", "NORMAL")
+    style = THREAT_POSTURE_STYLES.get(level, THREAT_POSTURE_STYLES["NORMAL"])
+    score = posture.get("score", 0)
+    drivers = posture.get("drivers", [])
+    driver_html = "".join(f"<li>{html.escape(d)}</li>" for d in drivers)
+
+    st.markdown(
+        f"""
+<div style="
+    background: {style['bg']};
+    border: 2px solid {style['border']};
+    border-radius: 16px;
+    padding: 1.2rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1.5rem;
+">
+    <div style="font-size: 2.5rem; line-height: 1;">{style['icon']}</div>
+    <div style="flex: 1;">
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.4rem;">
+            <span style="font-size: 1.2rem; font-weight: 700; color: {style['fg']};">
+                Threat Posture: {style['label']}
+            </span>
+            <span style="font-size: 0.85rem; color: {style['fg']}; font-family: monospace;
+                         background: rgba(0,0,0,0.06); padding: 0.2rem 0.6rem; border-radius: 999px;">
+                Score {score}/100
+            </span>
+        </div>
+        <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.88rem; color: {style['fg']}; opacity: 0.9;">
+            {driver_html}
+        </ul>
+    </div>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_unified_feed_item(item: dict[str, Any]) -> str:
+    """Render a single item from the unified activity feed as an HTML string."""
+    from services.constants import RISK_COLORS, SEVERITY_STYLES
+
+    ts = format_timestamp(item.get("timestamp", ""))
+    title = html.escape(item.get("title", "Untitled"))
+
+    if item["type"] == "screening":
+        risk = item.get("risk_level") or "SAFE"
+        color = RISK_COLORS.get(risk, "#475865")
+        score = item.get("meta", {}).get("hazard_score", 0)
+        seq_type = item.get("meta", {}).get("sequence_type", "")
+        return f"""
+<div style="display:flex; gap:0.8rem; align-items:flex-start; padding:0.6rem 0;
+            border-bottom:1px solid var(--bl-border);">
+    <div style="width:10px; height:10px; border-radius:50%; background:{color};
+                margin-top:0.35rem; flex-shrink:0;"></div>
+    <div style="flex:1; min-width:0;">
+        <div style="font-size:0.9rem; font-weight:500; white-space:nowrap; overflow:hidden;
+                    text-overflow:ellipsis;">{title}</div>
+        <div style="font-size:0.78rem; color:var(--bl-muted);">
+            {ts} &nbsp;·&nbsp; {html.escape(seq_type)} &nbsp;·&nbsp; Score {score:.2f}
+        </div>
+    </div>
+    <span style="font-size:0.72rem; font-weight:700; color:{color};
+                 background:{color}22; border-radius:999px; padding:0.15rem 0.55rem;
+                 white-space:nowrap; flex-shrink:0;">{html.escape(risk)}</span>
+</div>"""
+    else:
+        sev = item.get("severity") or "LOW"
+        sev_style = SEVERITY_STYLES.get(sev, {"fg": "#475865", "bg": "#eef2f4"})
+        region = item.get("meta", {}).get("region", "Global")
+        signal = item.get("meta", {}).get("signal_type", "")
+        return f"""
+<div style="display:flex; gap:0.8rem; align-items:flex-start; padding:0.6rem 0;
+            border-bottom:1px solid var(--bl-border);">
+    <div style="font-size:1rem; flex-shrink:0; margin-top:0.1rem;">📡</div>
+    <div style="flex:1; min-width:0;">
+        <div style="font-size:0.9rem; font-weight:500; white-space:nowrap; overflow:hidden;
+                    text-overflow:ellipsis;">{title}</div>
+        <div style="font-size:0.78rem; color:var(--bl-muted);">
+            {ts} &nbsp;·&nbsp; {html.escape(region)} &nbsp;·&nbsp; {html.escape(signal)}
+        </div>
+    </div>
+    <span style="font-size:0.72rem; font-weight:700; color:{sev_style['fg']};
+                 background:{sev_style['bg']}; border-radius:999px; padding:0.15rem 0.55rem;
+                 white-space:nowrap; flex-shrink:0;">{html.escape(sev)}</span>
+</div>"""
+
+
+def render_unified_feed(items: list[dict[str, Any]]) -> None:
+    """Render the full unified activity feed panel."""
+    if not items:
+        st.info("No recent activity to display.")
+        return
+    parts = [render_unified_feed_item(item) for item in items]
+    st.markdown(
+        f'<div style="max-height:480px; overflow-y:auto; padding-right:0.3rem;">{"".join(parts)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_regional_heatmap(regions: list[dict[str, Any]]) -> None:
+    """Styled table showing threat regions with severity-weighted colour coding."""
+    from services.constants import THREAT_POSTURE_STYLES
+
+    if not regions:
+        st.info("No regional threat data available.")
+        return
+
+    max_score = max((r.get("threat_score", 0) for r in regions), default=1) or 1
+
+    rows_html = ""
+    for r in regions:
+        score = r.get("threat_score", 0)
+        intensity = score / max_score
+        high = r.get("high_count", 0)
+        med = r.get("medium_count", 0)
+        low = r.get("low_count", 0)
+
+        if high > 0:
+            row_bg = f"rgba(220, 53, 69, {0.05 + intensity * 0.25})"
+            dot = "🔴"
+        elif med > 0:
+            row_bg = f"rgba(232, 150, 12, {0.05 + intensity * 0.2})"
+            dot = "🟡"
+        else:
+            row_bg = "rgba(25, 135, 84, 0.05)"
+            dot = "🟢"
+
+        signal_types = html.escape((r.get("signal_types") or "").replace(",", " · "))
+        rows_html += f"""
+<tr style="background:{row_bg};">
+    <td style="padding:0.55rem 0.8rem; font-weight:600;">{dot} {html.escape(r['region'])}</td>
+    <td style="padding:0.55rem 0.8rem; text-align:center;">{r.get('total_alerts', 0)}</td>
+    <td style="padding:0.55rem 0.8rem; text-align:center; color:#dc3545; font-weight:600;">{high or '—'}</td>
+    <td style="padding:0.55rem 0.8rem; text-align:center; color:#e8960c;">{med or '—'}</td>
+    <td style="padding:0.55rem 0.8rem; font-size:0.8rem; color:var(--bl-muted);">{signal_types}</td>
+</tr>"""
+
+    st.markdown(
+        f"""
+<table style="width:100%; border-collapse:collapse; font-size:0.88rem; border-radius:12px; overflow:hidden;
+              border:1px solid var(--bl-border);">
+  <thead>
+    <tr style="background:rgba(15,90,133,0.08); font-size:0.78rem; text-transform:uppercase;
+               letter-spacing:0.06em; color:var(--bl-muted);">
+      <th style="padding:0.5rem 0.8rem; text-align:left;">Region</th>
+      <th style="padding:0.5rem 0.8rem; text-align:center;">Alerts</th>
+      <th style="padding:0.5rem 0.8rem; text-align:center;">HIGH</th>
+      <th style="padding:0.5rem 0.8rem; text-align:center;">MED</th>
+      <th style="padding:0.5rem 0.8rem; text-align:left;">Signal Types</th>
+    </tr>
+  </thead>
+  <tbody>{rows_html}</tbody>
+</table>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_response_time_chart(rt_data: dict[str, Any]) -> None:
+    """Plotly histogram of response time distribution by risk tier."""
+    import plotly.graph_objects as go
+
+    by_risk = rt_data.get("by_risk", {})
+    if not by_risk:
+        st.info("No resolved cases with response time data yet.")
+        return
+
+    risk_colors = {"HIGH": "#dc3545", "REVIEW": "#e8960c", "SAFE": "#198754"}
+    fig = go.Figure()
+    for risk, stats in by_risk.items():
+        if not stats:
+            continue
+        fig.add_trace(go.Bar(
+            name=risk,
+            x=[risk],
+            y=[stats.get("mean_hours", 0)],
+            error_y=dict(
+                type="data",
+                array=[max(0, stats.get("p90_hours", 0) - stats.get("mean_hours", 0))],
+                visible=True,
+            ),
+            marker_color=risk_colors.get(risk, "#475865"),
+            text=[f"Mean: {stats.get('mean_hours', 0):.1f}h<br>P90: {stats.get('p90_hours', 0):.1f}h<br>n={stats.get('count', 0)}"],
+            textposition="outside",
+        ))
+
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        showlegend=False,
+        height=260,
+        margin=dict(l=10, r=10, t=10, b=30),
+        yaxis_title="Mean Hours",
+        yaxis=dict(gridcolor="rgba(0,0,0,0.05)"),
+        xaxis=dict(showgrid=False),
+        bargap=0.4,
+    )
+    st.plotly_chart(fig, use_container_width=True)

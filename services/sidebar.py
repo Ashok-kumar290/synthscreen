@@ -55,15 +55,52 @@ def render_global_sidebar() -> None:
         )
         st.session_state["user_role"] = role
 
-        # ── Active Intel Alert Banner ────────────────────────────────
+        # ── Threat Posture Indicator ──────────────────────────────────
+        try:
+            from services.dashboard import compute_threat_posture
+            from services.constants import THREAT_POSTURE_STYLES
+            posture = compute_threat_posture()
+            p_style = THREAT_POSTURE_STYLES.get(posture["level"], THREAT_POSTURE_STYLES["NORMAL"])
+            st.markdown(
+                f"""
+                <div style="background:{p_style['bg']}; border:1px solid {p_style['border']};
+                            border-radius:8px; padding:0.5rem 0.75rem; margin-top:0.8rem;
+                            font-size:0.82rem; font-weight:600; color:{p_style['fg']};
+                            display:flex; align-items:center; gap:0.4rem;">
+                    {p_style['icon']} Posture: {p_style['label']}
+                    <span style="margin-left:auto; font-family:monospace; font-size:0.75rem;">{posture['score']}/100</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        except Exception:
+            pass
+
+        # ── Active Intel Alert Banner ─────────────────────────────────
         from services.intelligence import list_alerts
-        active_alerts = len([a for a in list_alerts() if a["status"] not in ("DISMISSED", "REVIEWED")])
+        all_alerts_sidebar = list_alerts()
+        active_alerts_sidebar = [a for a in all_alerts_sidebar if a["status"] not in ("DISMISSED", "REVIEWED")]
+        active_alerts = len(active_alerts_sidebar)
         if active_alerts > 0:
             st.markdown(
                 f"""
                 <div style="background: rgba(231, 76, 60, 0.1); border-left: 3px solid #e74c3c;
-                            padding: 0.5rem; border-radius: 4px; margin-top: 1rem; font-size: 0.85rem;">
+                            padding: 0.5rem; border-radius: 4px; margin-top: 0.6rem; font-size: 0.85rem;">
                     <strong>{active_alerts} Active Intel Signal{'s' if active_alerts > 1 else ''}</strong>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            # Quick Intel — most urgent alert
+            high_sidebar = [a for a in active_alerts_sidebar if a["severity"] == "HIGH"]
+            top_alert = high_sidebar[0] if high_sidebar else active_alerts_sidebar[0]
+            title_truncated = top_alert['title'][:50] + ('…' if len(top_alert['title']) > 50 else '')
+            st.markdown(
+                f"""
+                <div style="background:rgba(243,156,18,0.06); border:1px solid #f39c12;
+                            border-radius:6px; padding:0.45rem 0.65rem; margin-top:0.4rem;
+                            font-size:0.78rem; color:#8a4c00;">
+                    <strong>⚡ {top_alert['severity']}</strong> · {title_truncated}
                 </div>
                 """,
                 unsafe_allow_html=True,

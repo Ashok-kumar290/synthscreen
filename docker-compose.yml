@@ -4,7 +4,7 @@ services:
     ports:
       - "8501:8501"
     environment:
-      BIOLENS_MODE: ${BIOLENS_MODE:-offline}
+      BIOLENS_MODE: ${BIOLENS_MODE:-offline}  # 'offline' or 'online'
       BIOLENS_DB_PATH: /app/data/biolens.db
       SYNTHSCREEN_ENDPOINT: ${SYNTHSCREEN_ENDPOINT:-}
       SYNTHSCREEN_TIMEOUT_SECONDS: ${SYNTHSCREEN_TIMEOUT_SECONDS:-30}

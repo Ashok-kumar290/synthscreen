@@ -8,6 +8,7 @@ from services import bootstrap_application, get_runtime_mode
 from services.constants import ANALYST_STATUSES, FINAL_ACTIONS
 from services.sidebar import render_global_sidebar
 from services.export import build_export_dataset, export_filename, export_screenings_csv, export_screenings_json
+from services.intelligence import get_case_intelligence
 from services.storage import get_screening, list_audit_events, list_screenings, update_review
 from services.ui import (
     action_badge,
@@ -59,6 +60,7 @@ st.session_state["selected_screening_id"] = selected_id
 
 case = get_screening(selected_id)
 audit_events = list_audit_events(selected_id)
+intel_links = get_case_intelligence(selected_id)
 export_record = build_export_dataset([selected_id])
 
 st.markdown(render_verdict_strip(case).replace("\n", " "), unsafe_allow_html=True)
@@ -171,6 +173,31 @@ with review_col:
         )
         st.success("Review state updated.")
         st.rerun()
+
+    st.markdown("#### Baseline Comparison")
+    st.write(case["baseline_result"] or "No baseline comparison is stored for this case.")
+    
+    st.markdown("#### Linked Intelligence Context")
+    if not intel_links:
+        st.write("No external intelligence signals linked to this case.")
+    else:
+        for link in intel_links:
+            priority_color = "#e74c3c" if link["priority"] == "HIGH" else "#f39c12" if link["priority"] == "MEDIUM" else "#3498db"
+            st.markdown(f"""
+            <div style="background: rgba(243, 156, 18, 0.05); border-left: 4px solid #f39c12; border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+                <div style="font-weight: 600; color: #d35400; margin-bottom: 0.4rem; font-size: 1.05rem;">{html.escape(link['title'])}</div>
+                <div style="font-size: 0.85rem; color: var(--bl-muted); margin-bottom: 0.8rem;">
+                    <strong>Alert ID:</strong> {link['alert_id']} | <strong>Region:</strong> {link['region']} | 
+                    <strong>Severity:</strong> {link['severity']} | <strong>Confidence:</strong> {link['confidence']}%
+                </div>
+                <div style="font-size: 0.9rem; margin-bottom: 0.5rem;"><strong>Watchlist Match:</strong> {html.escape(link['keyword'])} ({html.escape(link['w_category'])})</div>
+                <div style="font-size: 0.85rem; color: {priority_color}; font-weight: bold; margin-bottom: 0.5rem;">Impact: {link['priority']} Priority</div>
+                <div style="font-size: 0.85rem; background: rgba(255,255,255,0.5); padding: 0.5rem; border-radius: 4px;">
+                    <strong>Relevance:</strong> {html.escape(link['screening_relevance'])}<br>
+                    <strong>Action:</strong> {html.escape(link['suggested_action'])}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
     st.markdown("#### Audit Trail")
     if not audit_events:

@@ -90,6 +90,50 @@ def init_db() -> None:
         "CREATE INDEX IF NOT EXISTS idx_screenings_status ON screenings(analyst_status)",
         "CREATE INDEX IF NOT EXISTS idx_screenings_risk ON screenings(risk_level)",
         "CREATE INDEX IF NOT EXISTS idx_audit_screening_id ON audit_log(screening_id, event_time)",
+        """
+        CREATE TABLE IF NOT EXISTS intelligence_alerts (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            source_type TEXT NOT NULL,
+            source_name TEXT NOT NULL,
+            region TEXT NOT NULL,
+            signal_type TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            screening_relevance TEXT NOT NULL,
+            suggested_action TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'NEW'
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS watchlist_items (
+            id TEXT PRIMARY KEY,
+            alert_id TEXT NOT NULL,
+            keyword TEXT NOT NULL,
+            category TEXT NOT NULL,
+            region TEXT NOT NULL,
+            priority TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS case_intelligence_links (
+            id TEXT PRIMARY KEY,
+            case_id TEXT NOT NULL,
+            alert_id TEXT,
+            watchlist_id TEXT,
+            match_reason TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (case_id) REFERENCES screenings(id)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_alerts_status ON intelligence_alerts(status)",
+        "CREATE INDEX IF NOT EXISTS idx_watchlist_active ON watchlist_items(active)",
+        "CREATE INDEX IF NOT EXISTS idx_case_links_case_id ON case_intelligence_links(case_id)"
     )
 
     with get_connection() as connection:
@@ -103,6 +147,13 @@ def init_db() -> None:
             pass # Column already exists
             
         connection.commit()
+
+    # Initialise automation tables (defined in services/automation.py to avoid circular imports)
+    try:
+        from services.automation import init_automation_tables
+        init_automation_tables()
+    except Exception:
+        pass  # Fail silently if automation module is unavailable
 
 
 def reset_database() -> None:
@@ -479,3 +530,55 @@ def analytics_snapshot() -> dict[str, Any]:
         "activity_over_time": activity_over_time,
         "recent_flagged": recent_flagged,
     }
+
+
+def response_time_distribution() -> list[dict[str, Any]]:
+    """Return per-case response times (hours) from submission to review, for resolved cases."""
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                id, risk_level, analyst_status, final_action,
+                submitted_at, reviewed_at,
+                CAST(
+                    (julianday(reviewed_at) - julianday(submitted_at)) * 24
+                    AS REAL
+                ) AS response_hours
+            FROM screenings
+            WHERE reviewed_at IS NOT NULL
+              AND submitted_at IS NOT NULL
+              AND analyst_status IN ('CLEARED', 'CLOSED')
+            ORDER BY submitted_at DESC
+            LIMIT 500
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_cases_in_range(start_date: str, end_date: str) -> list[dict[str, Any]]:
+    """Return screenings submitted within an ISO date range (inclusive, YYYY-MM-DD)."""
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT * FROM screenings
+            WHERE substr(submitted_at, 1, 10) BETWEEN ? AND ?
+            ORDER BY submitted_at DESC
+            """,
+            (start_date, end_date),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_alerts_in_range(start_date: str, end_date: str) -> list[dict[str, Any]]:
+    """Return intelligence alerts created within an ISO date range (inclusive, YYYY-MM-DD)."""
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT * FROM intelligence_alerts
+            WHERE substr(created_at, 1, 10) BETWEEN ? AND ?
+            ORDER BY created_at DESC
+            """,
+            (start_date, end_date),
+        ).fetchall()
+    return [dict(row) for row in rows]
+

@@ -9,7 +9,7 @@ import streamlit as st
 
 from services import bootstrap_application, get_runtime_mode
 from services.model_interface import screen_sequence, get_base_url
-from services.storage import save_screening_case
+from services.storage import save_screening_case, update_review
 from services.constants import RISK_COLORS
 from services.sidebar import render_global_sidebar
 from services.ui import (
@@ -24,7 +24,13 @@ from services.ui import (
     render_primary_risk_drivers,
     render_intelligence_context_box,
 )
-from services.intelligence import match_case_to_watchlist, link_case_to_alert
+from services.intelligence import (
+    match_case_to_watchlist,
+    link_case_to_alert,
+    compute_intelligence_risk_modifier,
+    get_active_threat_regions,
+)
+from services.automation import evaluate_auto_rules
 
 def parse_fasta_records(raw_text: str) -> list[dict[str, str]]:
     records: list[dict[str, str]] = []
@@ -75,6 +81,17 @@ def render_result_card(item: dict[str, Any]) -> None:
     result = item["result"]
     risk_level = result["risk_level"]
     risk_color = RISK_COLORS.get(risk_level, "transparent")
+    intel_modifier = item.get("intel_modifier", 0.0)
+    
+    modifier_html = ""
+    if intel_modifier > 0:
+        effective = min(1.0, result["hazard_score"] + intel_modifier)
+        modifier_html = f"""
+<div style="display:inline-flex; align-items:center; gap:0.4rem; background:rgba(243,156,18,0.12);
+            border:1px solid #f39c12; border-radius:6px; padding:0.25rem 0.6rem;
+            font-size:0.82rem; font-weight:600; color:#8a4c00; margin-top:0.4rem;">
+    ⚡ Intel Modifier: +{intel_modifier:.3f} → Effective Score: {effective:.3f}
+</div>"""
     
     card_html = f"""
 <div class="bl-result-card" style="border-left: 6px solid {risk_color};">
@@ -84,6 +101,7 @@ def render_result_card(item: dict[str, Any]) -> None:
                     {len(item['sequence'])} residues/bases • {html.escape(item['sequence_type'])} • Category: {html.escape(result['category'])}
 </div>
 {render_verdict_strip(result)}
+{modifier_html}
 <p style="margin-top: 1rem; margin-bottom: 0;">{html.escape(result['explanation'])}</p>
 </div>
 </div>
@@ -123,6 +141,16 @@ render_hero(
     mode,
 )
 
+# Pre-screening threat context banner
+threat_regions = get_active_threat_regions()
+if threat_regions:
+    region_names = ", ".join(r["region"] for r in threat_regions[:3])
+    st.warning(
+        f"⚡ **Active HIGH-Severity Alerts** in: **{region_names}**. "
+        f"Watchlist matching is active — relevant sequences will be flagged automatically. "
+        f"[View Intelligence](Intelligence)"
+    )
+
 if saved_case_ids:
     ids_text = ", ".join(case_id[:8] for case_id in saved_case_ids)
     st.success(f"Saved {len(saved_case_ids)} case(s) at {format_timestamp(st.session_state.get('last_save_time'))}: {ids_text}")
@@ -155,6 +183,7 @@ with input_col:
                     "explanation": result.get("explanation", ""),
                     "sequence_type": sequence_type,
                 })
+                intel_modifier = compute_intelligence_risk_modifier(intel_matches)
                 
                 run_results.append(
                     {
@@ -163,6 +192,7 @@ with input_col:
                         "sequence_type": sequence_type,
                         "result": result,
                         "intelligence_matches": intel_matches,
+                        "intel_modifier": intel_modifier,
                     }
                 )
                 progress_bar.progress((i + 1) / len(submissions), text=f"Screened {i + 1} of {len(submissions)} sequences...")
@@ -247,6 +277,7 @@ if results:
     if valid_results:
         if st.button("Save Valid Results to Inbox", type="primary", use_container_width=True):
             saved_ids = []
+            auto_escalated = 0
             for item in valid_results:
                 case_id = save_screening_case(
                     sequence_text=item["sequence"],
@@ -255,11 +286,32 @@ if results:
                 )
                 saved_ids.append(case_id)
                 
-                if "intelligence_matches" in item:
-                    for match in item["intelligence_matches"]:
+                intel_matches = item.get("intelligence_matches", [])
+                if intel_matches:
+                    for match in intel_matches:
                         link_case_to_alert(case_id, match["alert_id"], match["watchlist_id"], match["match_reason"])
+                    
+                    # Evaluate automation rules
+                    fired_rules = evaluate_auto_rules(case_id, intel_matches)
+                    if fired_rules:
+                        # Apply the highest-priority rule's target status
+                        top_rule = fired_rules[0]
+                        if top_rule["target_status"] in ("ESCALATED", "IN_REVIEW"):
+                            update_review(
+                                screening_id=case_id,
+                                analyst_status=top_rule["target_status"],
+                                analyst_notes=f"Auto-set by rule: {top_rule['rule_name']}",
+                                final_action=None,
+                            )
+                            auto_escalated += 1
                         
             st.session_state["saved_case_ids"] = saved_ids
             st.session_state["last_save_time"] = datetime.now().astimezone().isoformat()
             st.session_state["screening_results"] = []
+            if auto_escalated:
+                st.session_state["auto_escalated_count"] = auto_escalated
             st.rerun()
+
+auto_esc = st.session_state.pop("auto_escalated_count", 0)
+if auto_esc:
+    st.warning(f"⚡ **{auto_esc} case(s) auto-escalated** by intelligence automation rules.")
