@@ -140,7 +140,7 @@ def _mock_explanation(seq_type: str, risk_level: str) -> str:
     return f"Mock {display_type} screening found multiple elevated functional cues relative to the baseline mock, so the case should be escalated."
 
 
-def _screen_mock(sequence: str, seq_type: str, model_name: str, data_source: str = "biolens-mock") -> dict[str, Any]:
+def _screen_mock(sequence: str, seq_type: str, model_name: str, data_source: str = "biolens-offline") -> dict[str, Any]:
     length = len(sequence)
     hash_factor = _hash_unit(sequence, seq_type)
 
@@ -294,14 +294,14 @@ def screen_sequence(sequence: str, seq_type: str) -> dict[str, Any]:
     Screen a DNA or protein sequence through the BioLens adapter contract.
     """
 
-    mode = os.getenv("BIOLENS_MODE", "integrated").strip().lower() or "integrated"
+    mode = os.getenv("BIOLENS_MODE", "offline").strip().lower() or "offline"
     model_name = f"biolens-{mode}-adapter"
     normalized, validation_error = _validate_sequence(sequence, seq_type)
 
     if validation_error:
         return _error_response(model_name, validation_error, data_source="biolens-validation")
 
-    if mode in {"mock", "demo"}:
+    if mode in {"offline", "demo"}:
         return _screen_mock(normalized or "", seq_type, model_name, data_source=f"biolens-{mode}")
 
     if mode == "integrated":

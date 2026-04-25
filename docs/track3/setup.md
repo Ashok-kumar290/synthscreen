@@ -14,12 +14,11 @@ Instructions for running the BioLens dashboard locally or via Docker.
 
 ## Local Setup
 
-### 1. Clone the repository and switch to the dashboard branch
+### 1. Clone the repository
 
 ```bash
 git clone <repository-url>
 cd funcscreen
-git checkout dash/biolens
 ```
 
 ### 2. Create a virtual environment
@@ -51,6 +50,12 @@ Click **Load Demo Cases** in the sidebar, or set the runtime mode to `demo` befo
 BIOLENS_MODE=demo streamlit run app.py
 ```
 
+To run in offline standalone mode (the default):
+
+```bash
+BIOLENS_MODE=offline streamlit run app.py
+```
+
 ---
 
 ## Docker Setup
@@ -67,6 +72,12 @@ The dashboard is available at **http://localhost:8501**.
 
 ```bash
 BIOLENS_MODE=demo docker compose up --build
+```
+
+Or run in offline standalone mode (default):
+
+```bash
+docker compose up --build
 ```
 
 ### Persist data across restarts
@@ -87,9 +98,9 @@ BioLens supports three modes controlled by the `BIOLENS_MODE` environment variab
 
 | Mode | Value | Description |
 |------|-------|-------------|
-| **Mock** | `mock` (default) | Returns deterministic local adapter responses. No external dependency. |
-| **Demo** | `demo` | Same as mock, but auto-loads representative seed cases on startup. |
-| **Integrated** | `integrated` | Forwards screening requests to a live Synthscreen endpoint. |
+| **Offline** | `offline` (default) | Standalone local triage engine. Computes risk scores from sequence features without any network dependency. |
+| **Demo** | `demo` | Same as offline, but auto-loads representative seed cases on startup for walkthroughs. |
+| **Integrated** | `integrated` | Forwards DNA screening requests to a live Synthscreen / SynthGuard API endpoint. Protein requests still use the local heuristic engine. |
 
 ### Integrated mode configuration
 
@@ -114,7 +125,7 @@ streamlit run app.py
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BIOLENS_MODE` | `mock` | Runtime mode: `mock`, `demo`, or `integrated` |
+| `BIOLENS_MODE` | `offline` | Runtime mode: `offline`, `demo`, or `integrated` |
 | `BIOLENS_DB_PATH` | `data/biolens.db` | Path to the SQLite database file |
 | `SYNTHSCREEN_ENDPOINT` | — | Synthscreen API URL (integrated mode only) |
 | `SYNTHSCREEN_TIMEOUT_SECONDS` | `15` | Request timeout (integrated mode only) |
@@ -130,6 +141,8 @@ streamlit run app.py
 | **Inbox** | `/Inbox` | Filter, sort, and browse the case queue. Route cases to review. |
 | **Review** | `/Review` | Inspect individual cases, update analyst status/notes/action, view audit trail |
 | **Analytics** | `/Analytics` | Operational charts: risk distribution, status, activity timeline, top categories |
+| **Intelligence** | `/Intelligence` | Threat intelligence feed: active policies, emerging alerts, and screening research |
+| **Archive** | `/Archive` | Read-only ledger of resolved and finalized cases for compliance history |
 
 ---
 
@@ -153,22 +166,28 @@ funcscreen/
 ├── requirements.txt          # Python dependencies
 ├── Dockerfile                # Container image definition
 ├── docker-compose.yml        # Compose orchestration
+├── .dockerignore             # Docker build context exclusions
 ├── .gitignore
 ├── pages/
 │   ├── 1_Screening.py        # Sequence intake and screening
 │   ├── 2_Inbox.py            # Case queue with filters
 │   ├── 3_Review.py           # Case detail and analyst decision
-│   └── 4_Analytics.py        # Operational metrics and charts
+│   ├── 4_Analytics.py        # Operational metrics and charts
+│   ├── 5_Intelligence.py     # Threat intelligence feed
+│   └── 6_Archive.py          # Resolved cases ledger
 ├── services/
 │   ├── __init__.py            # Bootstrap and runtime mode
 │   ├── constants.py           # Enums, paths, style tokens
-│   ├── model_interface.py     # Synthscreen adapter (mock / integrated)
+│   ├── model_interface.py     # Synthscreen adapter (offline / integrated)
 │   ├── storage.py             # SQLite schema and CRUD
 │   ├── export.py              # CSV / JSON export
 │   ├── seed_data.py           # Demo case loader
+│   ├── sidebar.py             # Global sidebar with role and admin controls
 │   └── ui.py                  # Shared Streamlit styling and components
 ├── data/
-│   └── demo_cases.json        # Representative seed cases
+│   ├── demo_cases.json        # Representative seed cases
+│   ├── intel_feed.json        # Threat intelligence feed data
+│   └── sample_dataset.json    # Curated sample dataset
 ├── docs/
 │   ├── interactive_docs.html  # Generated doc viewer (run generate_docs.py)
 │   └── track3/                # Track 3 documentation (merge-safe)

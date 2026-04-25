@@ -168,10 +168,10 @@ with guide_col:
     endpoint_display = os.environ.get("SYNTHSCREEN_ENDPOINT", "https://seyomi-synthguard-api.hf.space/biolens/screen")
     card_html = f"""
 <div class="bl-panel">
-<p><strong>Integrated</strong> forwards DNA requests to a live Track 1 API (currently set to <code>{html.escape(endpoint_display)}</code>). Protein requests transparently use the local mock engine.</p>
-<p><strong>Mock/Demo</strong> uses local mock generation.</p>
+<p><strong>Integrated</strong> forwards DNA requests to a live Track 1 API (currently set to <code>{html.escape(endpoint_display)}</code>). Protein requests use the local heuristic engine.</p>
+<p><strong>Offline</strong> uses the standalone local triage engine for all sequences. No internet required.</p>
 <p>Current Mode: <strong style="color: var(--bl-accent);">{mode.upper()}</strong></p>
-<p style="font-size: 0.85rem; color: var(--bl-muted); margin-top: 0.5rem;">To change the API endpoint or switch to mock mode, visit the ⚙️ System Admin settings on the main overview page.</p>
+<p style="font-size: 0.85rem; color: var(--bl-muted); margin-top: 0.5rem;">To change the API endpoint or switch modes, visit the ⚙️ System Admin settings on the main overview page.</p>
 </div>
 """
     st.markdown(card_html.replace("\n", " "), unsafe_allow_html=True)
@@ -211,7 +211,7 @@ if results:
         
         if "timeout" in err_msg.lower() or "connection" in err_msg.lower():
             title = f"SynthGuard API Unavailable ({html.escape(item['label'])})"
-            err_msg += " You can retry the request, or switch the BioLens Mode to 'mock' to use the local heuristic engine."
+            err_msg += " You can retry the request, or switch the BioLens Mode to 'offline' to use the local triage engine."
             
         render_error_card(title, err_msg)
 

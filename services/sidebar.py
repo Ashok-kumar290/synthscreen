@@ -30,7 +30,7 @@ def render_global_sidebar() -> None:
 
         with st.expander("⚙️ System Admin"):
             st.markdown("**API Settings**")
-            mode_options = ["integrated", "mock", "demo"]
+            mode_options = ["integrated", "offline", "demo"]
             current_mode_idx = mode_options.index(mode) if mode in mode_options else 0
             new_mode = st.radio("System Mode", mode_options, index=current_mode_idx, horizontal=True)
             if new_mode != mode:

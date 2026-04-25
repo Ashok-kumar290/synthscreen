@@ -6,9 +6,9 @@ from services.constants import RUNTIME_MODES
 
 
 def get_runtime_mode() -> str:
-    mode = os.getenv("BIOLENS_MODE", "integrated").strip().lower()
+    mode = os.getenv("BIOLENS_MODE", "offline").strip().lower()
     if mode not in RUNTIME_MODES:
-        return "integrated"
+        return "offline"
     return mode
 
 
