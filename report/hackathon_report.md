@@ -11,7 +11,12 @@
 
 ## Abstract
 
-DNA synthesis screeners today rely on sequence similarity (BLAST) against curated hazard databases. We demonstrate that this approach has two critical failure modes: (1) it flags **98.1% of benign sequences as hazardous** when applied against a comprehensive hazard database (false positive rate, real blastn 2.12.0), and (2) it misses AI-designed variants of dangerous proteins that fall below the percent-identity threshold. We present **SynthGuard**, a k-mer + LightGBM triage model (<5 MB, 2 ms/sequence, CPU-native) that achieves 91.8% recall at 6.8% FPR — a **14× reduction in false positives** versus real BLAST while maintaining comparable recall. On codon-shuffled variants simulating AI protein design, SynthGuard achieves 91.4% recall versus BLAST's near-zero at high shuffle rates. The model uses three feature layers: raw k-mer frequencies (k=3–6), RSCU (Relative Synonymous Codon Usage), and CAI (Codon Adaptation Index) — the last two added in v3 to detect codon-optimized hazardous sequences that evade k-mer matching. The system integrates with the Track 3 BioLens dashboard via a live FastAPI endpoint and is designed as a complementary layer to SecureDNA and commec, not a replacement.
+DNA synthesis screeners today rely on sequence similarity (BLAST) against curated hazard databases. We demonstrate that this approach has two critical failure modes: (1) it flags **98.1% of benign sequences as hazardous** when applied against a comprehensive hazard database (false positive rate, real blastn 2.12.0), and (2) it misses AI-designed variants of dangerous proteins that fall below the percent-identity threshold. We present **SynthGuard**, a dual-track biosecurity screening system:
+
+- **DNA track (k-mer + LightGBM):** <5 MB, 2 ms/sequence, CPU-native. Achieves 91.8% recall at 6.8% FPR — a **14× reduction in false positives** versus real BLAST. On codon-shuffled variants simulating AI protein design, achieves 91.4% recall versus BLAST's near-zero at high shuffle rates. Features include raw k-mer frequencies (k=3–6), RSCU, and CAI.
+- **Protein track (ESM-2 650M + protein k-mer):** Fine-tuned ESM-2 achieves AUROC 0.901 (Recall 86.9%) operating on translated protein sequences. A lightweight protein k-mer LightGBM (426 features, <2ms) achieves AUROC 0.937 (Recall 84.4%, FPR 12.5%) and is deployed to the live API. Both tracks are independent — a DNA-optimized evasion that evades the k-mer model still produces a protein sequence evaluated by ESM-2 or the protein k-mer model.
+
+The system integrates with the Track 3 BioLens dashboard via a live FastAPI endpoint and is designed as a complementary layer to SecureDNA and commec, not a replacement.
 
 ---
 
@@ -41,13 +46,31 @@ Neither failure mode is theoretical. Together they define the gap SynthGuard fil
 
 ## 2. Journey: From funcscreen to SynthGuard
 
-### 2.1 funcscreen (abandoned)
+### 2.1 Protein Track: funcscreen → ESM-2 Recovery → Protein k-mer
 
 The project began as `funcscreen`, a fine-tuned ESM-2 650M protein language model (LoRA, focal loss) intended to detect functional hazard from protein sequences. The approach was sound in theory: ESM-2 embeddings encode functional information beyond sequence similarity.
 
-However, evaluation revealed the model was non-functional: **AUROC 0.514** (effectively random). Investigation found missing classifier weights in the checkpoint — the LoRA fine-tuning had saved adapter weights but not the classification head, making predictions meaningless.
+Initial evaluation revealed AUROC 0.514 (effectively random). Root cause: the training checkpoint saved LoRA adapter weights but not the classification head — predictions were meaningless. This is reported as an honest negative result.
 
-**Decision:** Abandon funcscreen ESM-2 as a standalone model. The k-mer approach is more tractable, auditable, and deployable. ESM-2 is noted in Future Work as a potential ensemble component if retrained from scratch with correct weight saving.
+**Recovery via merged checkpoint:** The HF Hub upload had used `merge_and_unload()` to produce a self-contained checkpoint (`Seyomi/synthguard-esm2`). Evaluating this merged checkpoint on the held-out test set:
+
+| Metric | ESM-2 650M (merged LoRA) |
+|--------|--------------------------|
+| AUROC | **0.901** |
+| Recall | **86.9%** |
+| FPR | 26.3% |
+| F1 | 0.835 |
+
+**Lightweight protein k-mer (deployed to API):** ESM-2 requires ~5–10s on CPU and 2.6 GB RAM — too slow for real-time use on the HF Space free tier. We trained a protein k-mer LightGBM on 426 features: amino acid composition (20) + dipeptide frequencies (400) + physicochemical properties (6), using best-frame DNA→protein translation of the same training sequences.
+
+| Metric | Protein k-mer LightGBM |
+|--------|------------------------|
+| AUROC | **0.937** |
+| Recall | **84.4%** |
+| FPR | 12.5% |
+| F1 | 0.862 |
+
+The protein k-mer model (<1 MB, <2 ms on CPU) is deployed at `/protein/screen`. The ESM-2 model is available at `Seyomi/synthguard-esm2` for offline use where GPU is available.
 
 ### 2.2 SynthGuard k-mer v1 (10 hazard families)
 
@@ -179,7 +202,7 @@ Synthesis order (DNA sequence)
          Structured JSON → BioLens dashboard (Track 3)
 ```
 
-**Note:** ESM-2 protein track was attempted and abandoned — see Limitations. The pipeline is DNA-only. Protein sequences return a clear error message ("SynthGuard is a DNA-only screener").
+**Note:** The DNA track screens coding sequences. The protein track (`/protein/screen`) accepts amino acid sequences directly or coding DNA (auto-translated to best reading frame before scoring). Both tracks are independent — model disagreement (one flags, one does not) is itself a risk signal.
 
 ---
 
@@ -264,7 +287,22 @@ Top features by mean absolute SHAP value (k-mer v3 model):
 
 Every API call returns SHAP feature attributions — essential for human review workflows where analysts need to understand why a sequence was flagged, not just the score.
 
-### 4.6 Live Demo: Demonstrating the BLAST Gap
+### 4.6 Protein Track Benchmark
+
+Both protein models were evaluated on the held-out test set after DNA→protein translation (best-frame, ≥30 aa threshold):
+
+| Method | Recall | FPR | F1 | AUROC |
+|--------|--------|-----|----|-------|
+| **Protein k-mer LightGBM** (deployed, <2ms) | **0.844** | **0.125** | **0.862** | **0.937** |
+| **ESM-2 650M** (HF Hub, ~5–10s CPU) | **0.869** | 0.263 | 0.835 | 0.901 |
+
+The protein k-mer model achieves higher AUROC than ESM-2 on this dataset despite being orders of magnitude smaller. This reflects that amino acid composition + dipeptide frequencies are strong distinguishing signals for the 20 hazardous protein families in the training set.
+
+**Orthogonal signal:** The two tracks (DNA k-mer and protein k-mer) make different errors. A DNA-level codon-shuffled sequence that evades the DNA model still produces a protein sequence that the protein model evaluates independently. In adversarial scenarios where an attacker specifically games DNA codon usage, the protein track provides a second line of defense.
+
+**Minimum sequence length:** Protein scoring is unreliable below ~100 aa (dipeptide statistics are sparse). Sequences under 30 aa after translation are rejected. Sequences 30–100 aa are screened but the confidence is lower.
+
+### 4.7 Live Demo: Demonstrating the BLAST Gap
 
 At the SynthGuard API endpoint, we demonstrated the core finding in real time:
 
@@ -310,9 +348,10 @@ POST /biolens/screen
 ```
 
 ```
-POST /biolens/screen            ← BioLens primary endpoint
-POST /screen                    ← legacy single-sequence
-POST /screen/batch              ← up to 1000 sequences
+POST /biolens/screen            ← BioLens primary endpoint (DNA + protein routing)
+POST /screen                    ← DNA single-sequence
+POST /screen/batch              ← up to 1000 DNA sequences
+POST /protein/screen            ← protein (AA sequence or coding DNA, auto-translated)
 POST /split/submit              ← Track 4: submit a synthesis fragment
 GET  /split/customer/{id}       ← Track 4: fragment status per customer
 DELETE /split/customer/{id}/flush ← Track 4: clear customer state
@@ -333,26 +372,24 @@ The assembly uses greedy pairwise overlap with O(n²) fragment comparison, cappe
 
 The Track 3 BioLens dashboard calls `/biolens/screen` per synthesis order in INTEGRATED mode and renders the `risk_level` / `explanation` fields directly. CORS is open for the hackathon demo.
 
-**PROTEIN input handling:** Protein sequences return a structured error:
-```json
-{
-  "ok": false,
-  "error": "protein_not_supported",
-  "explanation": "SynthGuard is a DNA-only screener. Please submit the coding DNA sequence instead."
-}
-```
+**PROTEIN input handling via BioLens:** When `seq_type: "PROTEIN"` is passed or the sequence is detected as amino acids, the BioLens endpoint routes to the protein k-mer model (AUROC 0.937) and returns the standard risk_level schema. Protein sequences can also be submitted to `/protein/screen` directly.
 
 ---
 
 ## 6. Limitations and Honest Assessment
 
-### 6.1 ESM-2 Protein Track: Attempted and Abandoned
+### 6.1 Protein Track: High FPR Tradeoff
 
-We attempted to build a protein-track screener (funcscreen ESM-2 650M, LoRA fine-tuned). Evaluation revealed **AUROC 0.514** — effectively random. Root cause: the checkpoint saved LoRA adapter weights but not the classification head, making all predictions meaningless.
+Both protein models (ESM-2 AUROC 0.901, protein k-mer AUROC 0.937) have meaningfully higher FPR than the DNA k-mer model (FPR 26.3% and 12.5% respectively, vs. 6.8% for DNA). This reflects a fundamental difference in input: amino acid sequences carry less distinguishing information than coding DNA (no codon-usage signal), so the models must trade off more false positives to achieve comparable recall.
 
-**Impact on claims:** The paper abstract previously cited "dual-track" DNA + protein screening. This is inaccurate. SynthGuard is currently **DNA-only**. The ESM-2 result is reported honestly as a negative result in Section 2.1.
+**Designed use:** The protein track is intended as a confirmation layer, not primary triage. The recommended pipeline is:
+1. DNA k-mer model for fast triage (6.8% FPR)
+2. Protein k-mer model for confirmation on flagged sequences (12.5% FPR, independent signal)
+3. ESM-2 (offline, GPU) for highest-confidence cases
 
-**Why the DNA-only approach is still valid:** The k-mer model works on coding DNA sequences. Any protein-based threat must be ordered as DNA — the model intercepts it at that stage. A protein-track screener would add a second independent signal, which remains a useful direction but is not currently functional.
+Model disagreement — DNA flags, protein does not (or vice versa) — is itself a risk signal that routes to human review.
+
+**Initial checkpoint failure (documented):** The original ESM-2 training checkpoint (funcscreen) had AUROC 0.514 due to missing classifier weights. The merged checkpoint (`Seyomi/synthguard-esm2`) resolved this. This failure mode and its resolution are reported honestly for reproducibility.
 
 ### 6.2 BLAST Comparison Caveats
 
@@ -394,16 +431,19 @@ We recommend that any production deployment coordinate with USAMRIID, CDC, and t
 
 ## 8. Future Work
 
-1. **ESM-2 protein track (retrained from scratch):** Re-implement funcscreen with correct weight saving. An independent protein-track signal would make the system harder to evade at both the DNA and protein levels.
-2. **RFdiffusion red-teaming:** Evaluate against de novo protein designs with no sequence homology to any training example — the hardest adversarial case for k-mer models.
-3. **Close the Brucella gap:** Targeted data expansion for Brucella virulence factors (current: 60.9% recall).
-4. **Systematic Select Agent coverage:** Extend to all 60+ CDC/USDA Tier 1 Select Agents (current: ~22 families).
-5. **Production BLAST comparison:** Run real blastn against the full NCBI nt database to confirm FPR behavior at scale, and with organism-specific exclusion lists.
-6. **Online retraining pipeline:** Retrain quarterly as new AI design tools and novel pathogen sequences emerge.
+1. **Protein track ensemble:** Combine DNA k-mer + protein k-mer + ESM-2 scores into a single risk signal. Disagreement between tracks is already meaningful — formalizing it into a calibrated ensemble could reduce both FPR and false-negative rate below what either track achieves alone.
+2. **Reduce protein FPR:** Current protein k-mer FPR (12.5%) is higher than the DNA model. Adding more diverse benign protein sequences (especially from lab-standard expression vectors and housekeeping proteins) to protein training would push this down.
+3. **RFdiffusion red-teaming:** Evaluate against de novo protein designs with no sequence homology to any training example — the hardest adversarial case for k-mer models.
+4. **Close the Brucella gap:** Targeted data expansion for Brucella virulence factors (current: 60.9% recall).
+5. **Systematic Select Agent coverage:** Extend to all 60+ CDC/USDA Tier 1 Select Agents (current: ~22 families).
+6. **Production BLAST comparison:** Run real blastn against the full NCBI nt database to confirm FPR behavior at scale, and with organism-specific exclusion lists.
+7. **Online retraining pipeline:** Retrain quarterly as new AI design tools and novel pathogen sequences emerge.
 
 ---
 
 ## 9. Appendix: Key Numbers Summary
+
+**DNA Track (k-mer + LightGBM):**
 
 | Metric | Value | Notes |
 |--------|-------|-------|
@@ -432,6 +472,20 @@ We recommend that any production deployment coordinate with USAMRIID, CDC, and t
 | Training hazard families | 22 | up from 10 in v1 |
 | Training benign families | 17 | |
 | Dataset size | ~20,154 | balanced, augmented, v4 |
+
+**Protein Track:**
+
+| Metric | Protein k-mer (deployed) | ESM-2 650M (HF Hub) |
+|--------|--------------------------|----------------------|
+| Model size | <1 MB | 2.6 GB |
+| Inference time | <2 ms CPU | ~5–10 s CPU |
+| Feature dimensions | 426 | 650M parameters |
+| AUROC | **0.937** | **0.901** |
+| Recall | 84.4% | 86.9% |
+| FPR | 12.5% | 26.3% |
+| F1 | 0.862 | 0.835 |
+| Minimum sequence | 10 aa | 10 aa |
+| HF Hub | `Seyomi/synthguard-kmer` (protein_kmer_model.pkl) | `Seyomi/synthguard-esm2` |
 
 ---
 

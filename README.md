@@ -22,12 +22,21 @@ SynthGuard is a k-mer + LightGBM triage model that achieves **91.8% recall at 6.
 
 ## Benchmark Results
 
+**DNA Track:**
+
 | Method | Recall | FPR | F1 | AUROC |
 |--------|--------|-----|----|-------|
 | BLAST (real blastn 2.12.0, 70% threshold) | 0.998 | **0.981** | 0.671 | 0.509 |
-| **SynthGuard k-mer v4** | **0.918** | **0.068** | **0.925** | **0.977** |
+| **SynthGuard k-mer v4 (DNA)** | **0.918** | **0.068** | **0.925** | **0.977** |
 
-**AI-designed variant detection (systematic evaluation — 50 variants × 4 shuffle rates):**
+**Protein Track:**
+
+| Method | Recall | FPR | F1 | AUROC |
+|--------|--------|-----|----|-------|
+| **SynthGuard protein k-mer (deployed)** | **0.844** | **0.125** | **0.862** | **0.937** |
+| **SynthGuard ESM-2 650M (HF Hub)** | **0.869** | **0.263** | **0.835** | **0.901** |
+
+**AI-designed variant detection — DNA track (systematic evaluation — 50 variants × 4 shuffle rates):**
 
 | Shuffle Rate | SynthGuard | BLAST |
 |-------------|-----------|-------|
@@ -40,7 +49,7 @@ SynthGuard is a k-mer + LightGBM triage model that achieves **91.8% recall at 6.
 
 ## What's Actually Built
 
-**SynthGuard is DNA-only.** An ESM-2 protein track was attempted (funcscreen), evaluated at AUROC 0.514 (random), and abandoned — documented honestly in the report.
+**SynthGuard is a dual-track system.** The DNA k-mer model is the primary screener. The protein k-mer model (AUROC 0.937) and ESM-2 650M (AUROC 0.901) are the protein track — operating independently on translated sequences. An initial ESM-2 checkpoint (funcscreen) evaluated at AUROC 0.514 due to missing classifier weights in the checkpoint; the merged version on HF Hub is functional.
 
 ### Features (5,533 total)
 - **k-mer frequencies** k=3–6 (5,446 features)
@@ -71,10 +80,20 @@ curl -X POST https://seyomi-synthguard-api.hf.space/screen \
   -H "Content-Type: application/json" \
   -d '{"sequence": "ATGGCTAGCATG..."}'
 
-# BioLens integration (Track 3)
+# Screen a protein (amino acid sequence)
+curl -X POST https://seyomi-synthguard-api.hf.space/protein/screen \
+  -H "Content-Type: application/json" \
+  -d '{"sequence": "MKCILFLMGTCAVLFLM..."}'
+
+# BioLens integration — DNA
 curl -X POST https://seyomi-synthguard-api.hf.space/biolens/screen \
   -H "Content-Type: application/json" \
   -d '{"sequence": "ATGGCTAGCATG...", "seq_type": "DNA"}'
+
+# BioLens integration — protein
+curl -X POST https://seyomi-synthguard-api.hf.space/biolens/screen \
+  -H "Content-Type: application/json" \
+  -d '{"sequence": "MKCILFLMGTCAV...", "seq_type": "PROTEIN"}'
 
 # Track 4: split-order detection
 curl -X POST https://seyomi-synthguard-api.hf.space/split/submit \
@@ -126,7 +145,7 @@ synthscreen/
 
 ## Honest Limitations
 
-- **DNA-only**: protein track (ESM-2) was attempted and failed (AUROC 0.514). Report documents this.
+- **Protein FPR**: protein k-mer model FPR is 12.5% (vs 6.8% for DNA track). Designed as a confirmation layer, not primary triage.
 - **Brucella abortus**: 60.9% recall — virulence factors share k-mer patterns with environmental alpha-proteobacteria; insufficient targeted sequences available from NCBI without access to curated biosecurity DBs
 - **Short sequences <150bp**: 14.5% FPR — inherently ambiguous regime; tradeoff between FPR and recall cannot be resolved without wet-lab ground truth
 - **BLAST comparison caveat**: our benchmark uses training sequences as the BLAST DB (honest worst-case scenario). Production BLAST with curated, deduplicated DBs would have lower FPR — but the directional conclusion holds
