@@ -7,13 +7,12 @@ from typing import Any
 import plotly.graph_objects as go
 import streamlit as st
 
-from services.constants import ACTION_STYLES, RISK_STYLES, STATUS_STYLES
-
+from services.constants import ACTION_STYLES, RISK_STYLES, STATUS_STYLES, RISK_COLORS, DATA_SOURCE_STYLES
 
 def apply_page_style() -> None:
     st.markdown(
         """
-        <style>
+<style>
             :root {
                 --bl-ink: #172638;
                 --bl-muted: #596979;
@@ -119,7 +118,7 @@ def apply_page_style() -> None:
                 max-width: 760px;
             }
 
-            .bl-panel, .bl-case-card, .bl-metric-card {
+            .bl-panel, .bl-case-card, .bl-metric-card, .bl-result-card, .bl-error-card {
                 background: var(--bl-panel);
                 border: 1px solid var(--bl-border);
                 border-radius: 22px;
@@ -164,6 +163,8 @@ def apply_page_style() -> None:
                 margin-top: 0.7rem;
                 overflow-wrap: anywhere;
                 padding: 0.8rem 0.9rem;
+                max-height: 250px;
+                overflow-y: auto;
             }
 
             .bl-badge-row {
@@ -216,9 +217,190 @@ def apply_page_style() -> None:
             .bl-audit-entry {
                 margin-bottom: 0.7rem;
             }
-        </style>
+
+            /* NEW COGNITIVE UI CLASSES */
+            
+            .bl-result-card {
+                margin-bottom: 1.5rem;
+                padding: 0;
+                overflow: hidden;
+                transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+                animation: slide-up 0.4s ease-out;
+            }
+
+            @keyframes slide-up {
+                from { opacity: 0; transform: translateY(15px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            .bl-result-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 22px 55px rgba(23, 38, 56, 0.12);
+            }
+
+            .bl-result-card-inner {
+                padding: 1.25rem 1.4rem;
+                border-left: 6px solid transparent;
+            }
+
+            .bl-verdict-strip {
+                display: flex;
+                align-items: center;
+                gap: 1.5rem;
+                margin-bottom: 1rem;
+                padding-bottom: 1rem;
+                border-bottom: 1px solid var(--bl-border);
+                flex-wrap: wrap;
+            }
+            
+            .bl-verdict-left {
+                display: flex;
+                align-items: center;
+                gap: 1.25rem;
+            }
+            
+            .bl-verdict-right {
+                display: flex;
+                align-items: center;
+                gap: 1.25rem;
+                margin-left: auto;
+            }
+
+            .bl-score-gauge-container {
+                position: relative;
+                width: 64px;
+                height: 64px;
+            }
+
+            .bl-score-gauge-text {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-family: "SFMono-Regular", Consolas, monospace;
+                font-weight: 700;
+                font-size: 0.9rem;
+            }
+
+            .bl-confidence-bar {
+                display: flex;
+                flex-direction: column;
+                gap: 0.3rem;
+                width: 120px;
+            }
+            
+            .bl-confidence-label {
+                font-size: 0.75rem;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                color: var(--bl-muted);
+                display: flex;
+                justify-content: space-between;
+            }
+
+            .bl-confidence-track {
+                height: 6px;
+                background: rgba(0,0,0,0.06);
+                border-radius: 3px;
+                overflow: hidden;
+            }
+            
+            .bl-confidence-fill {
+                height: 100%;
+                border-radius: 3px;
+                background: var(--bl-accent);
+                transition: width 1s cubic-bezier(0.22, 1, 0.36, 1);
+            }
+
+            .bl-data-source-tag {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4rem;
+                font-size: 0.8rem;
+                font-weight: 600;
+                padding: 0.35rem 0.75rem;
+                border-radius: 8px;
+            }
+
+            .bl-threat-dimension {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+                margin-bottom: 0.5rem;
+            }
+            
+            .bl-threat-dim-label {
+                width: 160px;
+                font-size: 0.85rem;
+                font-weight: 500;
+            }
+            
+            .bl-threat-dim-track {
+                flex: 1;
+                height: 8px;
+                background: rgba(0,0,0,0.04);
+                border-radius: 4px;
+                overflow: hidden;
+            }
+            
+            .bl-threat-dim-fill {
+                height: 100%;
+                border-radius: 4px;
+                background: #8899a6;
+            }
+            
+            .bl-threat-dim-score {
+                width: 40px;
+                font-size: 0.8rem;
+                font-family: monospace;
+                text-align: right;
+                color: var(--bl-muted);
+            }
+
+            .bl-attr-legend {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                font-size: 0.75rem;
+                color: var(--bl-muted);
+                margin-top: 0.5rem;
+                margin-bottom: 0.2rem;
+            }
+            
+            .bl-attr-gradient {
+                height: 6px;
+                width: 100px;
+                border-radius: 3px;
+                background: linear-gradient(90deg, rgba(231,76,60,0.1) 0%, rgba(231,76,60,0.9) 100%);
+            }
+
+            .bl-error-card {
+                border-left: 4px solid #e74c3c;
+                padding: 1.2rem;
+                margin-bottom: 1rem;
+                display: flex;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+            
+            .bl-error-icon {
+                font-size: 1.5rem;
+            }
+            
+            .bl-error-content h4 {
+                margin: 0 0 0.4rem 0;
+                color: #c0392b;
+                font-size: 1.1rem;
+            }
+            
+            .bl-error-content p {
+                margin: 0;
+                font-size: 0.95rem;
+                color: var(--bl-ink);
+            }
+</style>
         """,
-        unsafe_allow_html=True,
+        unsafe_allow_html=True
     )
 
 
@@ -227,7 +409,6 @@ def _badge(text: str, background: str, foreground: str) -> str:
         f'<span class="bl-badge" style="background:{background}; color:{foreground}; border-color:{foreground}22;">'
         f"{html.escape(text)}</span>"
     )
-
 
 def risk_badge(level: str | None) -> str:
     style = RISK_STYLES.get(level or "", {"bg": "#eef2f4", "fg": "#475865"})
@@ -245,29 +426,25 @@ def action_badge(action: str | None) -> str:
 
 
 def render_hero(title: str, subtitle: str, mode_label: str) -> None:
-    st.markdown(
-        f"""
-        <section class="bl-hero">
-            <div class="bl-eyebrow">BioLens • {html.escape(mode_label.upper())} mode</div>
-            <h1>{html.escape(title)}</h1>
-            <p>{html.escape(subtitle)}</p>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
+    html_str = f"""
+<section class="bl-hero">
+<div class="bl-eyebrow">BioLens • {html.escape(mode_label.upper())} mode</div>
+<h1>{html.escape(title)}</h1>
+<p>{html.escape(subtitle)}</p>
+</section>
+"""
+    st.markdown(html_str.replace("\n", " "), unsafe_allow_html=True)
 
 
 def render_metric_card(label: str, value: str, detail: str) -> None:
-    st.markdown(
-        f"""
-        <div class="bl-metric-card">
-            <div class="bl-metric-label">{html.escape(label)}</div>
-            <div class="bl-metric-value">{html.escape(value)}</div>
-            <div class="bl-metric-detail">{html.escape(detail)}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    html_str = f"""
+<div class="bl-metric-card">
+<div class="bl-metric-label">{html.escape(label)}</div>
+<div class="bl-metric-value">{html.escape(value)}</div>
+<div class="bl-metric-detail">{html.escape(detail)}</div>
+</div>
+"""
+    st.markdown(html_str.replace("\n", " "), unsafe_allow_html=True)
 
 
 def format_timestamp(value: str | None) -> str:
@@ -335,16 +512,29 @@ def render_attributed_sequence(sequence: str, attribution_data: dict[str, Any] |
     scores = attribution_data.get("scores", [])
     pos_to_score = dict(zip(attribution_data.get("positions", []), scores))
 
+    st.markdown(
+        '''
+<div class="bl-attr-legend">
+<span>Low Risk</span>
+<div class="bl-attr-gradient"></div>
+<span>High Risk</span>
+</div>
+        ''', unsafe_allow_html=True
+    )
+
     html_parts = ['<div class="bl-sequence-preview" style="line-height: 1.6; word-break: break-all; font-family: monospace;">']
     
     for i, char in enumerate(sequence):
         if i in positions:
             score = pos_to_score.get(i, 0)
-            # Red highlight based on score
-            bg_color = f"rgba(231, 76, 60, {min(score, 1.0) * 0.85})"
-            html_parts.append(f'<span style="background-color: {bg_color}; border-radius: 2px; padding: 0 1px;" title="Attribution: {score:.2f}">{char}</span>')
+            # Yellow to red highlight based on score
+            intensity = min(score, 1.0)
+            # Use hsla for a yellow-to-red gradient (60 hue is yellow, 0 is red)
+            hue = 60 * (1 - intensity)
+            bg_color = f"hsla({hue}, 90%, 65%, {0.2 + intensity*0.8})"
+            html_parts.append(f'<span style="background-color: {bg_color}; border-radius: 2px; padding: 0 1px; font-weight: 600;" title="Attribution: {score:.2f}">{char}</span>')
         else:
-            html_parts.append(char)
+            html_parts.append(f'<span style="opacity: 0.8;">{char}</span>')
             
     html_parts.append('</div>')
     st.markdown("".join(html_parts), unsafe_allow_html=True)
@@ -354,3 +544,112 @@ def render_attributed_sequence(sequence: str, attribution_data: dict[str, Any] |
         st.markdown("<div style='margin-top: 0.5rem; font-size: 0.85rem; color: var(--bl-muted);'><strong>Highlighted Regions:</strong></div>", unsafe_allow_html=True)
         for r in regions:
             st.markdown(f"<div style='font-size: 0.8rem; margin-top: 0.2rem;'>• {r['label']} (Pos {r['start']}-{r['end']}, Score {r['score']:.2f})</div>", unsafe_allow_html=True)
+
+# --- NEW UI COMPONENTS ---
+
+def render_score_gauge(score: float, risk_level: str) -> str:
+    color = RISK_COLORS.get(risk_level, "#475865")
+    circumference = 2 * 3.14159 * 28
+    offset = circumference - (score * circumference)
+    
+    return f"""
+<div class="bl-score-gauge-container">
+<svg width="64" height="64" viewBox="0 0 64 64">
+<circle cx="32" cy="32" r="28" fill="none" stroke="rgba(0,0,0,0.06)" stroke-width="6" />
+<circle cx="32" cy="32" r="28" fill="none" stroke="{color}" stroke-width="6" 
+                stroke-dasharray="{circumference}" stroke-dashoffset="{offset}" 
+                transform="rotate(-90 32 32)" stroke-linecap="round" 
+                style="transition: stroke-dashoffset 1s ease-out;" />
+</svg>
+<div class="bl-score-gauge-text" style="color: {color};">{score:.2f}</div>
+</div>
+    """
+
+def render_confidence_bar(confidence: float) -> str:
+    pct = int(confidence * 100)
+    color = "#1f6a4d" if pct > 70 else ("#8a4c00" if pct > 40 else "#8f2424")
+    return f"""
+<div class="bl-confidence-bar">
+<div class="bl-confidence-label">
+<span>Confidence</span>
+<span style="color: {color}; font-weight: 600;">{pct}%</span>
+</div>
+<div class="bl-confidence-track">
+<div class="bl-confidence-fill" style="width: {pct}%; background: {color};"></div>
+</div>
+</div>
+    """
+
+def render_data_source_tag(data_source: str | None) -> str:
+    ds = data_source or "unknown"
+    style = DATA_SOURCE_STYLES.get(ds, {"bg": "#eef2f4", "fg": "#475865", "label": ds})
+    return f"""
+<div class="bl-data-source-tag" style="background: {style['bg']}; color: {style['fg']}; border: 1px solid {style['fg']}33;">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+<path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+</svg>
+        {style['label']}
+</div>
+    """
+
+def render_verdict_strip(result: dict[str, Any]) -> str:
+    score_gauge = render_score_gauge(result["hazard_score"], result["risk_level"])
+    badge = risk_badge(result["risk_level"])
+    confidence_bar = render_confidence_bar(result["confidence"])
+    data_source = render_data_source_tag(result.get("data_source"))
+    
+    return f"""
+<div class="bl-verdict-strip">
+<div class="bl-verdict-left">
+{score_gauge}
+{badge}
+</div>
+<div class="bl-verdict-right">
+{confidence_bar}
+{data_source}
+</div>
+</div>
+    """
+
+def render_threat_bars(breakdown: dict[str, Any] | None) -> None:
+    if not breakdown:
+        st.info("No structured threat breakdown available.")
+        return
+        
+    metrics = [
+        ("Pathogenicity", breakdown.get("pathogenicity", 0)),
+        ("Evasion Potential", breakdown.get("evasion_potential", 0)),
+        ("Synthesis Feasibility", breakdown.get("synthesis_feasibility", 0)),
+        ("Env. Resilience", breakdown.get("environmental_resilience", 0)),
+        ("Host Range", breakdown.get("host_range", 0)),
+    ]
+    
+    html_parts = []
+    for label, score in metrics:
+        color = "#e74c3c" if score > 0.6 else ("#f39c12" if score > 0.3 else "#2ecc71")
+        pct = score * 100
+        html_parts.append(f"""
+<div class="bl-threat-dimension">
+<div class="bl-threat-dim-label">{label}</div>
+<div class="bl-threat-dim-track">
+<div class="bl-threat-dim-fill" style="width: {pct}%; background: {color};"></div>
+</div>
+<div class="bl-threat-dim-score">{score:.2f}</div>
+</div>
+        """)
+        
+    st.markdown("".join(html_parts), unsafe_allow_html=True)
+
+def render_error_card(title: str, detail: str) -> None:
+    html_str = f"""
+<div class="bl-error-card">
+<div class="bl-error-icon">⚠️</div>
+<div class="bl-error-content">
+<h4>{html.escape(title)}</h4>
+<p>{html.escape(detail)}</p>
+</div>
+</div>
+"""
+    st.markdown(html_str.replace("\n", " "), unsafe_allow_html=True)

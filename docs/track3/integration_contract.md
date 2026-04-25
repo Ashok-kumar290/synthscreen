@@ -41,6 +41,7 @@ def screen_sequence(sequence: str, seq_type: str) -> dict:
     "explanation": str | None,          # Short, readable reasoning
     "baseline_result": str | None,      # Optional baseline comparison text
     "model_name": str,                  # Audit-visible model identifier
+    "data_source": str,                 # Provenance: "synthguard-api" | "biolens-heuristic" | "biolens-mock"
     "error": str | None                 # Machine-readable error when ok=False
 }
 ```
@@ -100,7 +101,15 @@ Thresholds in mock mode:
 
 - String identifier for auditing purposes
 - Format in mock mode: `"biolens-mock-adapter"`, `"biolens-demo-adapter"`
-- Format in integrated mode: whatever the Synthscreen endpoint returns
+- Format in integrated mode: whatever the Synthscreen endpoint returns, or `"biolens-heuristic"` for protein sequences.
+
+### `data_source`
+
+- Provenance label for UI rendering and transparency
+- `"synthguard-api"` for results from the live Track 1 model
+- `"biolens-heuristic"` for results from the local BioLens engine (used for Protein sequences)
+- `"biolens-mock"` or `"biolens-demo"` for simulated data
+- `"unknown"` or `"biolens-config"` for errors originating before screening
 
 ### `error`
 
@@ -128,9 +137,11 @@ The adapter validates inputs before processing:
 
 ## Integrated Mode
 
-When `BIOLENS_MODE=integrated`, the adapter sends a POST request to `SYNTHSCREEN_ENDPOINT`:
+When `BIOLENS_MODE=integrated`, BioLens uses a **dual-engine architecture**:
+1. **DNA** requests are routed via POST to `SYNTHSCREEN_ENDPOINT`.
+2. **Protein** requests transparently fall back to the BioLens local heuristic engine, since the Track 1 SynthGuard API only supports DNA k-mer scoring.
 
-### Request
+### DNA Request (to API)
 
 ```http
 POST <SYNTHSCREEN_ENDPOINT>
@@ -150,10 +161,10 @@ The Synthscreen endpoint must return a JSON body conforming to the same return v
 
 | Scenario | Error Code |
 |----------|------------|
-| `SYNTHSCREEN_ENDPOINT` not set | `missing_synthscreen_endpoint` |
+| Timeout on HF Space cold start | `integration_timeout_error:<message>` |
 | HTTP error response | `integration_http_error:<status_code>` |
 | Connection failure | `integration_connection_error:<reason>` |
-| Timeout or parse error | `integration_parse_error:<detail>` |
+| Parse error | `integration_parse_error:<detail>` |
 | Invalid response fields | `invalid_integrated_response:<detail>` |
 
 ---

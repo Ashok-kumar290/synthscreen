@@ -19,6 +19,19 @@ RISK_STYLES = {
     "READY": {"bg": "#dff1fb", "fg": "#0f5a85"},
 }
 
+RISK_COLORS = {
+    "SAFE": "#198754",
+    "REVIEW": "#e8960c",
+    "HIGH": "#dc3545",
+}
+
+DATA_SOURCE_STYLES = {
+    "synthguard-api": {"bg": "#dff1fb", "fg": "#0f5a85", "label": "SynthGuard AI"},
+    "biolens-heuristic": {"bg": "#fff2db", "fg": "#8a4c00", "label": "BioLens Heuristic"},
+    "biolens-mock": {"bg": "#eef2f4", "fg": "#475865", "label": "Mock Data"},
+    "biolens-demo": {"bg": "#eef2f4", "fg": "#475865", "label": "Demo Data"},
+}
+
 STATUS_STYLES = {
     "NEW": {"bg": "#e8eefc", "fg": "#284e9b"},
     "IN_REVIEW": {"bg": "#ece7fb", "fg": "#5c3aa6"},

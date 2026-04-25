@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 from datetime import datetime
 from typing import Any
 
@@ -8,8 +9,16 @@ import streamlit as st
 from services import bootstrap_application, get_runtime_mode
 from services.model_interface import screen_sequence
 from services.storage import save_screening_case
-from services.ui import apply_page_style, format_timestamp, render_hero, render_metric_card, risk_badge, render_threat_radar
-
+from services.constants import RISK_COLORS
+from services.ui import (
+    apply_page_style,
+    format_timestamp,
+    render_hero,
+    render_verdict_strip,
+    render_threat_bars,
+    render_error_card,
+    render_attributed_sequence,
+)
 
 def parse_fasta_records(raw_text: str) -> list[dict[str, str]]:
     records: list[dict[str, str]] = []
@@ -58,37 +67,36 @@ def collect_submissions(sequence_text: str, uploaded_file: Any) -> list[dict[str
 
 def render_result_card(item: dict[str, Any]) -> None:
     result = item["result"]
-    st.markdown(
-        f"""
-        <div class="bl-case-card">
-            <div class="bl-case-row">
-                <div>
-                    <div class="bl-case-title">{item['label']}</div>
-                    <div class="bl-case-meta">{len(item['sequence'])} residues/bases • {item['sequence_type']}</div>
-                </div>
-                <div class="bl-badge-row">
-                    {risk_badge(result['risk_level'])}
-                </div>
-            </div>
-            <div class="bl-case-meta">Category: {result['category']}</div>
-            <p>{result['explanation']}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    metrics = st.columns(3)
-    with metrics[0]:
-        render_metric_card("Hazard score", f"{result['hazard_score']:.2f}", "Normalized 0.0 to 1.0")
-    with metrics[1]:
-        render_metric_card("Confidence", f"{result['confidence']:.2f}", "Adapter confidence")
-    with metrics[2]:
-        render_metric_card("Model", result["model_name"], "Audit-visible identifier")
-    if result["baseline_result"]:
-        st.caption(f"Baseline comparison: {result['baseline_result']}")
-        
-    if result.get("threat_breakdown"):
-        st.markdown("#### Structured Threat Assessment")
-        render_threat_radar(result["threat_breakdown"])
+    risk_level = result["risk_level"]
+    risk_color = RISK_COLORS.get(risk_level, "transparent")
+    
+    card_html = f"""
+<div class="bl-result-card" style="border-left: 6px solid {risk_color};">
+<div class="bl-result-card-inner">
+<div style="font-weight: 600; font-size: 1.1rem; margin-bottom: 0.3rem;">{html.escape(item['label'])}</div>
+<div style="font-size: 0.85rem; color: var(--bl-muted); margin-bottom: 1.2rem;">
+                    {len(item['sequence'])} residues/bases • {html.escape(item['sequence_type'])} • Category: {html.escape(result['category'])}
+</div>
+{render_verdict_strip(result)}
+<p style="margin-top: 1rem; margin-bottom: 0;">{html.escape(result['explanation'])}</p>
+</div>
+</div>
+        """
+    st.markdown(card_html.replace("\n", " "), unsafe_allow_html=True)
+    with st.expander("▶ Show Full Analysis"):
+        col1, col2 = st.columns([1.1, 0.9], gap="large")
+        with col1:
+            st.markdown("#### Structured Threat Assessment")
+            render_threat_bars(result.get("threat_breakdown"))
+        with col2:
+            st.markdown("#### Baseline Comparison")
+            if result.get("baseline_result"):
+                st.info(result["baseline_result"])
+            else:
+                st.markdown("<p style='color: var(--bl-muted); font-size: 0.9rem;'>No baseline comparison available.</p>", unsafe_allow_html=True)
+                
+        st.markdown("#### Sequence Highlight")
+        render_attributed_sequence(item["sequence"], result.get("attribution_data"))
 
 
 st.set_page_config(page_title="BioLens Screening", layout="wide")
@@ -120,13 +128,15 @@ with input_col:
             placeholder="Paste raw sequence text here. Whitespace is ignored.",
         )
         uploaded_file = st.file_uploader("Or upload FASTA", type=["fa", "fasta", "faa", "txt"])
-        submitted = st.form_submit_button("Run Screening", use_container_width=True)
+        submitted = st.form_submit_button("Run Screening", type="primary", use_container_width=True)
 
     if submitted:
         try:
             submissions = collect_submissions(sequence_text, uploaded_file)
             run_results: list[dict[str, Any]] = []
-            for submission in submissions:
+            
+            progress_bar = st.progress(0, text="Screening sequences...")
+            for i, submission in enumerate(submissions):
                 result = screen_sequence(submission["sequence"], sequence_type)
                 run_results.append(
                     {
@@ -136,22 +146,27 @@ with input_col:
                         "result": result,
                     }
                 )
+                progress_bar.progress((i + 1) / len(submissions), text=f"Screened {i + 1} of {len(submissions)} sequences...")
+            
+            progress_bar.empty()
             st.session_state["screening_results"] = run_results
+            
+            if "biolens-validation" in [r["result"].get("data_source") for r in run_results if not r["result"].get("ok")]:
+                st.error("Some sequences failed validation. Please fix and resubmit.")
+                
         except ValueError as exc:
-            st.error(str(exc))
+            render_error_card("Input Validation Failed", str(exc))
 
 with guide_col:
     st.subheader("Run Mode")
-    st.markdown(
-        """
-        <div class="bl-panel">
-            <p><strong>Mock</strong> returns deterministic local adapter responses for development.</p>
-            <p><strong>Demo</strong> behaves like mock mode and auto-loads representative cases into SQLite.</p>
-            <p><strong>Integrated</strong> forwards requests to a Synthscreen endpoint while keeping the same contract.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    card_html = f"""
+<div class="bl-panel">
+<p><strong>Integrated</strong> forwards DNA requests to a live Track 1 SynthGuard endpoint. Protein requests transparently use the local BioLens heuristic engine.</p>
+<p><strong>Demo</strong> auto-loads representative cases and uses local heuristic generation.</p>
+<p>Current Mode: <strong style="color: var(--bl-accent);">{mode.upper()}</strong></p>
+</div>
+"""
+    st.markdown(card_html.replace("\n", " "), unsafe_allow_html=True)
     st.subheader("Safe Handling")
     st.info(
         "BioLens supports defensive screening workflows only. Invalid submissions are rejected and not written to the case database."
@@ -163,12 +178,38 @@ if results:
     valid_results = [item for item in results if item["result"]["ok"]]
     invalid_results = [item for item in results if not item["result"]["ok"]]
 
+    if len(results) > 1:
+        highs = sum(1 for r in valid_results if r["result"]["risk_level"] == "HIGH")
+        reviews = sum(1 for r in valid_results if r["result"]["risk_level"] == "REVIEW")
+        safes = sum(1 for r in valid_results if r["result"]["risk_level"] == "SAFE")
+        fails = len(invalid_results)
+        
+        summary_html = f"""
+<div style="display: flex; gap: 1rem; align-items: center; background: rgba(255,255,255,0.5); padding: 0.8rem 1.2rem; border-radius: 12px; margin-bottom: 1.5rem; border: 1px solid var(--bl-border);">
+<div style="font-weight: 600;">{len(results)} sequences screened:</div>
+<div style="display: flex; gap: 0.5rem; align-items: center;"><span style="color: #dc3545; font-size: 1.2rem;">●</span> {highs} HIGH</div>
+<div style="display: flex; gap: 0.5rem; align-items: center;"><span style="color: #e8960c; font-size: 1.2rem;">●</span> {reviews} REVIEW</div>
+<div style="display: flex; gap: 0.5rem; align-items: center;"><span style="color: #198754; font-size: 1.2rem;">●</span> {safes} SAFE</div>
+            {f'<div style="display: flex; gap: 0.5rem; align-items: center; margin-left: auto; color: #e74c3c;"><span style="font-size: 1.2rem;">⚠️</span> {fails} FAILED</div>' if fails > 0 else ''}
+</div>
+        """
+        st.markdown(summary_html.replace("\n", " "), unsafe_allow_html=True)
+
+    for item in invalid_results:
+        err_msg = item['result'].get('error', 'Unknown error')
+        ds = item['result'].get('data_source', '')
+        
+        title = f"Failed to screen {html.escape(item['label'])}"
+        
+        if "timeout" in err_msg.lower() or "connection" in err_msg.lower():
+            title = f"SynthGuard API Unavailable ({html.escape(item['label'])})"
+            err_msg += " You can retry the request, or switch the BioLens Mode to 'mock' to use the local heuristic engine."
+            
+        render_error_card(title, err_msg)
+
     for item in valid_results:
         with st.container():
             render_result_card(item)
-
-    for item in invalid_results:
-        st.error(f"{item['label']}: {item['result']['error']}")
 
     if valid_results:
         if st.button("Save Valid Results to Inbox", type="primary", use_container_width=True):

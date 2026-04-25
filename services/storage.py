@@ -29,6 +29,7 @@ SCREENING_COLUMNS = (
     "reviewed_at",
     "threat_breakdown",
     "attribution_data",
+    "data_source",
 )
 
 
@@ -71,7 +72,8 @@ def init_db() -> None:
             final_action TEXT,
             reviewed_at TEXT,
             threat_breakdown TEXT,
-            attribution_data TEXT
+            attribution_data TEXT,
+            data_source TEXT
         )
         """,
         """
@@ -93,6 +95,13 @@ def init_db() -> None:
     with get_connection() as connection:
         for statement in statements:
             connection.execute(statement)
+        
+        # Add data_source column if it doesn't exist (SQLite doesn't support IF NOT EXISTS for ADD COLUMN)
+        try:
+            connection.execute("ALTER TABLE screenings ADD COLUMN data_source TEXT")
+        except sqlite3.OperationalError:
+            pass # Column already exists
+            
         connection.commit()
 
 
@@ -131,6 +140,7 @@ def _normalize_screening_record(record: dict[str, Any]) -> dict[str, Any]:
         "reviewed_at": record.get("reviewed_at"),
         "threat_breakdown": json.dumps(record.get("threat_breakdown")) if record.get("threat_breakdown") else None,
         "attribution_data": json.dumps(record.get("attribution_data")) if record.get("attribution_data") else None,
+        "data_source": str(record.get("data_source") or "unknown"),
     }
 
 
@@ -188,6 +198,7 @@ def save_screening_case(sequence_text: str, sequence_type: str, result: dict[str
             "reviewed_at": None,
             "threat_breakdown": result.get("threat_breakdown"),
             "attribution_data": result.get("attribution_data"),
+            "data_source": result.get("data_source"),
         },
         audit_events=[
             {
@@ -220,6 +231,16 @@ def get_screening(screening_id: str) -> dict[str, Any]:
         result_dict["threat_breakdown"] = json.loads(result_dict["threat_breakdown"])
     if result_dict.get("attribution_data"):
         result_dict["attribution_data"] = json.loads(result_dict["attribution_data"])
+    if not result_dict.get("data_source"):
+        model_name = result_dict.get("model_name", "")
+        if "heuristic" in model_name:
+            result_dict["data_source"] = "biolens-heuristic"
+        elif "mock" in model_name:
+            result_dict["data_source"] = "biolens-mock"
+        elif "demo" in model_name:
+            result_dict["data_source"] = "biolens-demo"
+        else:
+            result_dict["data_source"] = "synthguard-api"
         
     return result_dict
 

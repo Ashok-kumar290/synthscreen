@@ -18,6 +18,7 @@ from services.ui import (
     status_badge,
     render_threat_radar,
     render_attributed_sequence,
+    render_verdict_strip,
 )
 
 
@@ -56,40 +57,35 @@ case = get_screening(selected_id)
 audit_events = list_audit_events(selected_id)
 export_record = build_export_dataset([selected_id])
 
-header_cols = st.columns(4)
+st.markdown(render_verdict_strip(case).replace("\n", " "), unsafe_allow_html=True)
+
+header_cols = st.columns(2)
 with header_cols[0]:
-    render_metric_card("Hazard score", f"{case['hazard_score']:.2f}", case["risk_level"])
-with header_cols[1]:
-    render_metric_card("Confidence", f"{case['confidence']:.2f}", case["model_name"])
-with header_cols[2]:
     render_metric_card("Submitted", format_timestamp(case["submitted_at"]), case["sequence_type"])
-with header_cols[3]:
+with header_cols[1]:
     reviewed_label = format_timestamp(case["reviewed_at"]) if case["reviewed_at"] else "Pending"
     render_metric_card("Reviewed", reviewed_label, case["analyst_status"])
 
 detail_col, review_col = st.columns([1.1, 0.9], gap="large")
 
 with detail_col:
-    st.markdown(
-        f"""
-        <div class="bl-case-card">
-            <div class="bl-case-row">
-                <div>
-                    <div class="bl-case-title">Case {case['id']}</div>
-                    <div class="bl-case-meta">{case['category']}</div>
-                </div>
-                <div class="bl-badge-row">
+    card_html = f"""
+<div class="bl-case-card">
+<div class="bl-case-row">
+<div>
+<div class="bl-case-title">Case {case['id']}</div>
+<div class="bl-case-meta">{case['category']}</div>
+</div>
+<div class="bl-badge-row">
                     {risk_badge(case['risk_level'])}
                     {status_badge(case['analyst_status'])}
                     {action_badge(case['final_action'] or 'UNSET')}
-                </div>
-            </div>
-            <p>{case['explanation']}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
+</div>
+</div>
+<p>{case['explanation']}</p>
+</div>
+        """
+    st.markdown(card_html.replace("\n", " "), unsafe_allow_html=True)
     if case.get("threat_breakdown"):
         st.markdown("#### Structured Threat Assessment")
         render_threat_radar(case["threat_breakdown"])
@@ -160,11 +156,11 @@ with review_col:
             detail_text = json.dumps(event["details"], ensure_ascii=True)
             st.markdown(
                 f"""
-                <div class="bl-panel bl-audit-entry">
-                    <strong>{event['event_type']}</strong><br>
-                    <span class="bl-case-meta">{format_timestamp(event['event_time'])}</span>
-                    <div class="bl-audit-text">{detail_text}</div>
-                </div>
+<div class="bl-panel bl-audit-entry">
+<strong>{event['event_type']}</strong><br>
+<span class="bl-case-meta">{format_timestamp(event['event_time'])}</span>
+<div class="bl-audit-text">{detail_text}</div>
+</div>
                 """,
                 unsafe_allow_html=True,
             )

@@ -78,7 +78,7 @@ def _longest_run(sequence: str) -> int:
     return longest
 
 
-def _error_response(model_name: str, error_text: str) -> dict[str, Any]:
+def _error_response(model_name: str, error_text: str, data_source: str = "unknown") -> dict[str, Any]:
     return {
         "ok": False,
         "hazard_score": None,
@@ -89,6 +89,7 @@ def _error_response(model_name: str, error_text: str) -> dict[str, Any]:
         "baseline_result": None,
         "model_name": model_name,
         "error": error_text,
+        "data_source": data_source,
     }
 
 
@@ -139,7 +140,7 @@ def _mock_explanation(seq_type: str, risk_level: str) -> str:
     return f"Mock {display_type} screening found multiple elevated functional cues relative to the baseline mock, so the case should be escalated."
 
 
-def _screen_mock(sequence: str, seq_type: str, model_name: str) -> dict[str, Any]:
+def _screen_mock(sequence: str, seq_type: str, model_name: str, data_source: str = "biolens-mock") -> dict[str, Any]:
     length = len(sequence)
     hash_factor = _hash_unit(sequence, seq_type)
 
@@ -211,6 +212,7 @@ def _screen_mock(sequence: str, seq_type: str, model_name: str) -> dict[str, Any
         "baseline_result": _baseline_result(risk_level),
         "model_name": model_name,
         "error": None,
+        "data_source": data_source,
         "threat_breakdown": {
             "pathogenicity": round(pathogenicity, 3),
             "evasion_potential": round(evasion_potential, 3),
@@ -232,6 +234,7 @@ def _coerce_integrated_response(payload: dict[str, Any], fallback_model_name: st
             return _error_response(
                 str(payload.get("model_name") or fallback_model_name),
                 str(payload.get("error") or "integration_failure"),
+                data_source="synthguard-api",
             )
 
         risk_level = str(payload.get("risk_level"))
@@ -250,11 +253,12 @@ def _coerce_integrated_response(payload: dict[str, Any], fallback_model_name: st
             "baseline_result": str(payload.get("baseline_result")) if payload.get("baseline_result") else None,
             "model_name": str(payload.get("model_name") or fallback_model_name),
             "error": None,
+            "data_source": "synthguard-api",
             "threat_breakdown": payload.get("threat_breakdown"),
             "attribution_data": payload.get("attribution_data"),
         }
     except (TypeError, ValueError) as exc:
-        return _error_response(fallback_model_name, f"invalid_integrated_response:{exc}")
+        return _error_response(fallback_model_name, f"invalid_integrated_response:{exc}", data_source="synthguard-api")
 
 
 _DEFAULT_ENDPOINT = "https://seyomi-synthguard-api.hf.space/biolens/screen"
@@ -263,7 +267,7 @@ def _screen_integrated(sequence: str, seq_type: str, model_name: str) -> dict[st
     endpoint = os.getenv("SYNTHSCREEN_ENDPOINT", _DEFAULT_ENDPOINT)
 
     payload = json.dumps({"sequence": sequence, "seq_type": seq_type}).encode("utf-8")
-    timeout_seconds = float(os.getenv("SYNTHSCREEN_TIMEOUT_SECONDS", "15"))
+    timeout_seconds = float(os.getenv("SYNTHSCREEN_TIMEOUT_SECONDS", "30"))
     request_object = request.Request(
         endpoint,
         data=payload,
@@ -276,11 +280,13 @@ def _screen_integrated(sequence: str, seq_type: str, model_name: str) -> dict[st
             body = response.read().decode("utf-8")
         return _coerce_integrated_response(json.loads(body), model_name)
     except error.HTTPError as exc:
-        return _error_response(model_name, f"integration_http_error:{exc.code}")
+        return _error_response(model_name, f"integration_http_error:{exc.code}", data_source="synthguard-api")
     except error.URLError as exc:
-        return _error_response(model_name, f"integration_connection_error:{exc.reason}")
+        if isinstance(exc.reason, TimeoutError) or "timed out" in str(exc.reason).lower():
+            return _error_response(model_name, "integration_timeout_error:The SynthGuard API space is waking up or overloaded.", data_source="synthguard-api")
+        return _error_response(model_name, f"integration_connection_error:{exc.reason}", data_source="synthguard-api")
     except (TimeoutError, ValueError, json.JSONDecodeError) as exc:
-        return _error_response(model_name, f"integration_parse_error:{exc}")
+        return _error_response(model_name, f"integration_parse_error:{exc}", data_source="synthguard-api")
 
 
 def screen_sequence(sequence: str, seq_type: str) -> dict[str, Any]:
@@ -293,12 +299,27 @@ def screen_sequence(sequence: str, seq_type: str) -> dict[str, Any]:
     normalized, validation_error = _validate_sequence(sequence, seq_type)
 
     if validation_error:
-        return _error_response(model_name, validation_error)
+        return _error_response(model_name, validation_error, data_source="biolens-validation")
 
     if mode in {"mock", "demo"}:
-        return _screen_mock(normalized or "", seq_type, model_name)
+        return _screen_mock(normalized or "", seq_type, model_name, data_source=f"biolens-{mode}")
 
     if mode == "integrated":
-        return _screen_integrated(normalized or "", seq_type, model_name)
+        # The SynthGuard API only supports DNA. Fall back to mock mode for PROTEIN sequences.
+        if seq_type == "PROTEIN":
+            return _screen_mock(normalized or "", seq_type, "biolens-heuristic", data_source="biolens-heuristic")
+        
+        # Try the integrated API for DNA
+        result = _screen_integrated(normalized or "", seq_type, model_name)
+        
+        # If the API returns a known error that we'd rather handle gracefully (like sequence_too_short),
+        # or if it fails completely (e.g., HF space is asleep/timeout), fallback to mock mode 
+        # so the dashboard demo doesn't completely break.
+        if not result.get("ok"):
+            # We return the actual error so the UI can handle it explicitly with the new error cards.
+            # No silent fallback here anymore.
+            return result
+            
+        return result
 
-    return _error_response(model_name, f"unsupported_runtime_mode:{mode}")
+    return _error_response(model_name, f"unsupported_runtime_mode:{mode}", data_source="biolens-config")

@@ -39,14 +39,14 @@ else:
         with col:
             st.markdown(
                 f"""
-                <div class="bl-panel" style="margin-bottom: 1rem;">
-                    <div style="font-size: 0.8rem; color: var(--bl-muted); text-transform: uppercase; margin-bottom: 0.3rem;">{p['date']} • {p['source']}</div>
-                    <div style="font-weight: 600; font-size: 1.05rem; margin-bottom: 0.5rem; line-height: 1.3;">{p['title']}</div>
-                    <div style="font-size: 0.9rem; margin-bottom: 0.8rem;">{p['summary']}</div>
-                    <div style="background: rgba(15, 90, 133, 0.08); padding: 0.6rem; border-radius: 6px; font-size: 0.85rem; border-left: 3px solid var(--bl-accent);">
-                        <strong>Workflow Impact:</strong> {p['relevance_to_screening']}
-                    </div>
-                </div>
+<div class="bl-panel" style="margin-bottom: 1rem;">
+<div style="font-size: 0.8rem; color: var(--bl-muted); text-transform: uppercase; margin-bottom: 0.3rem;">{p['date']} • {p['source']}</div>
+<div style="font-weight: 600; font-size: 1.05rem; margin-bottom: 0.5rem; line-height: 1.3;">{p['title']}</div>
+<div style="font-size: 0.9rem; margin-bottom: 0.8rem;">{p['summary']}</div>
+<div style="background: rgba(15, 90, 133, 0.08); padding: 0.6rem; border-radius: 6px; font-size: 0.85rem; border-left: 3px solid var(--bl-accent);">
+<strong>Workflow Impact:</strong> {p['relevance_to_screening']}
+</div>
+</div>
                 """,
                 unsafe_allow_html=True
             )
@@ -62,16 +62,16 @@ else:
         for a in alerts:
             st.markdown(
                 f"""
-                <div class="bl-case-card" style="border-left: 4px solid #e74c3c;">
-                    <div class="bl-case-row">
-                        <div>
-                            <div class="bl-case-title" style="color: #c0392b;">{a['title']}</div>
-                            <div class="bl-case-meta">{a['date']} • {a['source']}</div>
-                        </div>
-                    </div>
-                    <div style="font-size: 0.95rem; margin-top: 0.4rem; margin-bottom: 0.8rem;">{a['summary']}</div>
-                    <div style="font-size: 0.85rem; color: var(--bl-muted);"><strong>Note:</strong> {a['relevance_to_screening']}</div>
-                </div>
+<div class="bl-case-card" style="border-left: 4px solid #e74c3c;">
+<div class="bl-case-row">
+<div>
+<div class="bl-case-title" style="color: #c0392b;">{a['title']}</div>
+<div class="bl-case-meta">{a['date']} • {a['source']}</div>
+</div>
+</div>
+<div style="font-size: 0.95rem; margin-top: 0.4rem; margin-bottom: 0.8rem;">{a['summary']}</div>
+<div style="font-size: 0.85rem; color: var(--bl-muted);"><strong>Note:</strong> {a['relevance_to_screening']}</div>
+</div>
                 """,
                 unsafe_allow_html=True
             )
@@ -83,16 +83,16 @@ else:
         for r in research:
             st.markdown(
                 f"""
-                <div class="bl-case-card" style="border-left: 4px solid #3498db;">
-                    <div class="bl-case-row">
-                        <div>
-                            <div class="bl-case-title" style="color: #2980b9;">{r['title']}</div>
-                            <div class="bl-case-meta">{r['date']} • {r['source']}</div>
-                        </div>
-                    </div>
-                    <div style="font-size: 0.95rem; margin-top: 0.4rem; margin-bottom: 0.8rem;">{r['summary']}</div>
-                    <div style="font-size: 0.85rem; color: var(--bl-muted);"><strong>Insight:</strong> {r['relevance_to_screening']}</div>
-                </div>
+<div class="bl-case-card" style="border-left: 4px solid #3498db;">
+<div class="bl-case-row">
+<div>
+<div class="bl-case-title" style="color: #2980b9;">{r['title']}</div>
+<div class="bl-case-meta">{r['date']} • {r['source']}</div>
+</div>
+</div>
+<div style="font-size: 0.95rem; margin-top: 0.4rem; margin-bottom: 0.8rem;">{r['summary']}</div>
+<div style="font-size: 0.85rem; color: var(--bl-muted);"><strong>Insight:</strong> {r['relevance_to_screening']}</div>
+</div>
                 """,
                 unsafe_allow_html=True
             )

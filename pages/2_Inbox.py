@@ -95,21 +95,21 @@ else:
             sequence_preview = f"{case['sequence_text'][:72]}..." if len(case["sequence_text"]) > 72 else case["sequence_text"]
             st.markdown(
                 f"""
-                <div class="bl-case-card">
-                    <div class="bl-case-row">
-                        <div>
-                            <div class="bl-case-title">Case {case['id'][:8]} • {case['category']}</div>
-                            <div class="bl-case-meta">{format_timestamp(case['submitted_at'])} • {case['sequence_type']}</div>
-                        </div>
-                        <div class="bl-badge-row">
+<div class="bl-case-card">
+<div class="bl-case-row">
+<div>
+<div class="bl-case-title">Case {case['id'][:8]} • {case['category']}</div>
+<div class="bl-case-meta">{format_timestamp(case['submitted_at'])} • {case['sequence_type']}</div>
+</div>
+<div class="bl-badge-row">
                             {risk_badge(case['risk_level'])}
                             {status_badge(case['analyst_status'])}
-                        </div>
-                    </div>
-                    <div class="bl-case-meta">Score {case['hazard_score']:.2f} • Confidence {case['confidence']:.2f}</div>
-                    <p>{case['explanation']}</p>
-                    <div class="bl-sequence-preview">{sequence_preview}</div>
-                </div>
+</div>
+</div>
+<div class="bl-case-meta">Score {case['hazard_score']:.2f} • Confidence {case['confidence']:.2f}</div>
+<p>{case['explanation']}</p>
+<div class="bl-sequence-preview">{sequence_preview}</div>
+</div>
                 """,
                 unsafe_allow_html=True,
             )
