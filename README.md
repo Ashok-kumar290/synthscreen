@@ -1,113 +1,141 @@
-# SynthScreen: AI Biodesign Guardrails for DNA Synthesis Screening
+# SynthGuard: Closing the AI Biodesign Gap in DNA Synthesis Screening
 
 **AIxBio Hackathon 2026 — Track 1: DNA Screening & Synthesis Controls**
+**Team:** Ashok Kumar
+**Live API:** https://seyomi-synthguard-api.hf.space
+**Model:** https://huggingface.co/Seyomi/synthguard-kmer
+**Dataset:** https://huggingface.co/datasets/Seyomi/synthscreen-dataset
+**Report:** [`report/hackathon_report.md`](report/hackathon_report.md)
+
+---
 
 ## The Problem
 
-AI protein design tools (ProteinMPNN, RFdiffusion) create a critical new attack surface:
-they can generate **functional analogs of dangerous proteins** that are sequence-divergent
-from known hazards. Existing screening infrastructure (BLAST, SecureDNA, commec HMMs)
-relies on sequence similarity — it misses these variants entirely.
+DNA synthesis screeners rely on BLAST percent-identity against curated hazard databases. We measured two failure modes with real blastn 2.12.0:
 
-```
-Attacker uses ProteinMPNN on Ricin A-chain PDB structure
-→ Generates 50 novel sequences with same function, ~35% BLAST identity
-→ 73% pass BLAST at 70% identity threshold (industry standard)
-→ Synthesis company ships the order
-→ SynthScreen catches 89% of them
-```
+1. **98.1% false positive rate** — BLAST flags nearly every sequence, benign or hazardous, making it operationally unusable
+2. **0% detection of AI-designed variants** at ≥75% synonymous substitution — codon-optimized toxins evade identity thresholds entirely
 
-## Our Approach
+SynthGuard is a k-mer + LightGBM triage model that achieves **91.8% recall at 6.8% FPR** — a 14× reduction in false positives versus real BLAST.
 
-**DNABERT-2 + ESM-2 fine-tuned to detect functional hazard, not sequence similarity.**
+---
 
-| Method | Detection of ProteinMPNN Variants | Short Seq (<150bp) |
-|--------|-----------------------------------|-------------------|
-| BLAST (70% threshold) | ~27% | ~12% |
-| SecureDNA (HMM) | ~45% | ~31% |
-| SynthScreen (ours) | **~89%** | **~78%** |
+## Benchmark Results
 
-### How it works
+| Method | Recall | FPR | F1 | AUROC |
+|--------|--------|-----|----|-------|
+| BLAST (real blastn 2.12.0, 70% threshold) | 0.998 | **0.981** | 0.671 | 0.509 |
+| **SynthGuard k-mer v4** | **0.918** | **0.068** | **0.925** | **0.977** |
 
-1. **DNA Track** (DNABERT-2 117M + LoRA): operates directly on DNA sequences in synthesis orders
-2. **Protein Track** (ESM-2 650M + LoRA): translates ORFs and classifies at amino acid level
-3. **Sliding Window**: handles short fragments (≥50bp) and long orders (>3kb)
-4. **Hard Example Mining**: iteratively finds failures, oversamples 3× in next training round
+**AI-designed variant detection (systematic evaluation — 50 variants × 4 shuffle rates):**
 
-### Training data novelty
+| Shuffle Rate | SynthGuard | BLAST |
+|-------------|-----------|-------|
+| 25% synonymous substitution | **98%** | 0% |
+| 50% synonymous substitution | **92%** | 0% |
+| 75% synonymous substitution | **98%** | 0% |
+| 90% synonymous substitution | **92%** | 0% |
 
-- NCBI Select Agent sequences (original + codon-shuffled variants)
-- ProteinMPNN-generated functional analogs of dangerous protein structures
-- Short fragment augmentation (50–300bp windows from full sequences)
-- Class-balanced with benign plasmids, housekeeping genes, common lab vectors
+---
 
-## Quickstart
+## What's Actually Built
+
+**SynthGuard is DNA-only.** An ESM-2 protein track was attempted (funcscreen), evaluated at AUROC 0.514 (random), and abandoned — documented honestly in the report.
+
+### Features (5,533 total)
+- **k-mer frequencies** k=3–6 (5,446 features)
+- **RSCU** — Relative Synonymous Codon Usage (64 features): detects codon-optimized sequences
+- **CAI** — Codon Adaptation Index vs E. coli, human, yeast (3 features)
+- **Amino acid composition** (20 features): pathogen-specific AA biases independent of codon usage
+
+### Models
+- **General triage model** (LightGBM, sequences ≥150bp): AUROC 0.977
+- **Short-seq specialist** (LightGBM, sequences <150bp): AUROC 0.897
+- **Track 4 split-order detection**: greedy overlap assembly of fragments per customer, alerts on assembled ESCALATE
+
+### Decision tiers
+- `ALLOW` — risk score < 0.30
+- `REVIEW` — 0.30 ≤ score < 0.60 → human review queue
+- `ESCALATE` — score ≥ 0.60 → hold order
+
+---
+
+## API Usage
 
 ```bash
-# 1. Install
-pip install -r requirements.txt
+# Health check
+curl https://seyomi-synthguard-api.hf.space/health
 
-# 2. Build dataset
-python data/build_dataset.py --email you@email.com --output data/processed/synthscreen_dna_v1_dataset
+# Screen a sequence
+curl -X POST https://seyomi-synthguard-api.hf.space/screen \
+  -H "Content-Type: application/json" \
+  -d '{"sequence": "ATGGCTAGCATG..."}'
 
-# 3. Generate ProteinMPNN variants (the key novel contribution)
-git clone https://github.com/dauparas/ProteinMPNN
-python data/generate_mpnn_variants.py --n_seqs 50 --output data/mpnn_variants.json
+# BioLens integration (Track 3)
+curl -X POST https://seyomi-synthguard-api.hf.space/biolens/screen \
+  -H "Content-Type: application/json" \
+  -d '{"sequence": "ATGGCTAGCATG...", "seq_type": "DNA"}'
 
-# 4. Train (see notebooks/colab_train.ipynb for Colab Pro)
-python scripts/training/train_synthscreen.py \
-    --config configs/synthscreen_v1.json \
-    --model_type dnabert2 \
-    --dataset_path data/processed/synthscreen_dna_v1_dataset
-
-# 5. Benchmark vs BLAST
-python scripts/eval/benchmark_vs_blast.py \
-    --model_dir models/synthscreen_v1/best \
-    --variants_json data/mpnn_variants.json
-
-# 6. Run demo
-python app/demo.py --share
+# Track 4: split-order detection
+curl -X POST https://seyomi-synthguard-api.hf.space/split/submit \
+  -H "Content-Type: application/json" \
+  -d '{"customer_id": "cust-001", "order_id": "ord-001", "sequence": "ATGGCTAGC..."}'
 ```
 
-## Directory Structure
+---
+
+## Quickstart (Colab)
+
+```python
+# Train from scratch (GPU recommended)
+!git clone https://github.com/Ashok-kumar290/synthscreen
+%cd synthscreen
+!pip install lightgbm scikit-learn biopython datasets huggingface_hub
+
+# Build dataset (fetches from NCBI, ~20 min)
+# See notebooks/synthguard_full.ipynb
+
+# Run full benchmark pipeline
+!python scripts/run_pipeline.py \
+    --dataset data/processed/synthscreen_dna_v4_dataset \
+    --output  results/pipeline \
+    --skip_protein --skip_dna --skip_blast
+```
+
+---
+
+## Repository Structure
 
 ```
 synthscreen/
-├── data/
-│   ├── build_dataset.py          # NCBI fetch + codon-shuffle augmentation
-│   └── generate_mpnn_variants.py # ProteinMPNN variant generation (the key gap demo)
-├── scripts/
-│   ├── training/
-│   │   └── train_synthscreen.py  # DNABERT-2 / ESM-2 fine-tuning with hard mining
-│   └── eval/
-│       └── benchmark_vs_blast.py # SynthScreen vs BLAST comparison + plots
-├── configs/
-│   └── synthscreen_v1.json       # Training hyperparameters
-├── notebooks/
-│   └── colab_train.ipynb         # End-to-end Colab Pro training notebook
 ├── app/
-│   └── demo.py                   # Gradio demo for judges
-└── report/
-    └── (hackathon report goes here)
+│   ├── api.py                    # FastAPI app — all endpoints including Track 4
+│   ├── api_space/
+│   │   ├── Dockerfile            # HF Space deployment
+│   │   └── requirements.txt
+│   └── split_order_detector.py   # Track 4 module (standalone reference)
+├── scripts/
+│   └── run_pipeline.py           # Full benchmark pipeline
+├── report/
+│   └── hackathon_report.md       # Full technical report
+└── data/
+    └── processed/                # Built datasets (not committed, on HF Hub)
 ```
 
-## Key Technical Contributions
+---
 
-1. **ProteinMPNN → BLAST gap demonstration**: quantified how many AI-designed sequences evade current screening
-2. **Short fragment detection**: sliding window handles 50bp+ fragments where BLAST breaks down
-3. **Codon diversity augmentation**: trains on synonymous variants to prevent sequence-memorization overfitting
-4. **Dual-track architecture**: DNA-level (DNABERT-2) + protein-level (ESM-2) for defense in depth
+## Honest Limitations
 
-## Integration
+- **DNA-only**: protein track (ESM-2) was attempted and failed (AUROC 0.514). Report documents this.
+- **Brucella abortus**: 60.9% recall — virulence factors share k-mer patterns with environmental alpha-proteobacteria; insufficient targeted sequences available from NCBI without access to curated biosecurity DBs
+- **Short sequences <150bp**: 14.5% FPR — inherently ambiguous regime; tradeoff between FPR and recall cannot be resolved without wet-lab ground truth
+- **BLAST comparison caveat**: our benchmark uses training sequences as the BLAST DB (honest worst-case scenario). Production BLAST with curated, deduplicated DBs would have lower FPR — but the directional conclusion holds
+- **No wet-lab validation**: all results are computational
 
-SynthScreen is designed to plug into existing infrastructure:
-- **SecureDNA**: add as a post-filter for sequences SecureDNA marks as uncertain
-- **commec**: run in parallel as a second opinion on ambiguous HMM hits
-- **Synthesis order portals**: REST API wrapper (Gradio `share=True` for demo)
+---
 
 ## Related Work
 
-- [SecureDNA](https://securedna.org/) — open-source DNA screening
+- [SecureDNA](https://securedna.org/) — cryptographic DNA screening
 - [commec (IBBIS)](https://github.com/ibbis-screening/common-mechanism) — HMM biorisk screening
-- [ProteinMPNN](https://github.com/dauparas/ProteinMPNN) — protein sequence design (the tool we're guarding against)
-- [funcscreen](../funcscreen/) — our protein-track predecessor (98% hazard detection on novel variants)
+- [ProteinMPNN](https://github.com/dauparas/ProteinMPNN) — protein sequence design
