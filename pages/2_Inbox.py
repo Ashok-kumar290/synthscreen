@@ -4,6 +4,7 @@ import streamlit as st
 
 from services import bootstrap_application, get_runtime_mode
 from services.constants import ANALYST_STATUSES, RISK_LEVELS
+from services.sidebar import render_global_sidebar
 from services.export import build_export_dataset, export_filename, export_screenings_csv, export_screenings_json
 from services.storage import list_screenings
 from services.ui import (
@@ -19,6 +20,7 @@ from services.ui import (
 st.set_page_config(page_title="BioLens Inbox", layout="wide")
 bootstrap_application()
 apply_page_style()
+render_global_sidebar()
 
 mode = get_runtime_mode()
 render_hero(
@@ -27,10 +29,19 @@ render_hero(
     mode,
 )
 
+current_role = st.session_state.get("user_role", "Analyst")
+is_supervisor = current_role == "Supervisor"
+
+# Default filters based on role
+if is_supervisor:
+    default_statuses = ["ESCALATED"]
+else:
+    default_statuses = ["NEW", "IN_REVIEW"]
+
 filters_col, export_col = st.columns([1.2, 0.8], gap="large")
 
 with filters_col:
-    selected_statuses = st.multiselect("Analyst status", ANALYST_STATUSES, default=[])
+    selected_statuses = st.multiselect("Analyst status", ANALYST_STATUSES, default=default_statuses)
     selected_risks = st.multiselect("Risk tier", RISK_LEVELS, default=[])
 
 with export_col:
@@ -86,6 +97,38 @@ with download_cols[1]:
     )
 
 st.markdown("### Queue")
+
+# Quick Actions bar
+action_cols = st.columns(3)
+with action_cols[0]:
+    if not is_supervisor:
+        safe_ids = [c["id"] for c in cases if c["risk_level"] == "SAFE" and c["analyst_status"] in ("NEW", "IN_REVIEW")]
+        if st.button(f"✅ Approve All SAFE ({len(safe_ids)})", disabled=len(safe_ids) == 0, use_container_width=True):
+            from services.storage import bulk_update_status
+            bulk_update_status(safe_ids, "CLEARED", "APPROVE")
+            st.toast(f"Approved {len(safe_ids)} SAFE cases.", icon="✅")
+            st.rerun()
+    else:
+        esc_ids = [c["id"] for c in cases if c["analyst_status"] == "ESCALATED"]
+        if st.button(f"✅ Approve All ESCALATED ({len(esc_ids)})", disabled=len(esc_ids) == 0, use_container_width=True):
+            from services.storage import bulk_update_status
+            bulk_update_status(esc_ids, "CLEARED", "APPROVE")
+            st.toast(f"Approved {len(esc_ids)} ESCALATED cases.", icon="✅")
+            st.rerun()
+
+with action_cols[1]:
+    if not is_supervisor:
+        high_ids = [c["id"] for c in cases if c["risk_level"] == "HIGH" and c["analyst_status"] in ("NEW", "IN_REVIEW")]
+        if st.button(f"🚨 Escalate All HIGH ({len(high_ids)})", disabled=len(high_ids) == 0, use_container_width=True):
+            from services.storage import bulk_update_status
+            bulk_update_status(high_ids, "ESCALATED", "ESCALATE")
+            st.toast(f"Escalated {len(high_ids)} HIGH cases.", icon="🚨")
+            st.rerun()
+
+with action_cols[2]:
+    st.metric("Queue Depth", len(cases))
+
+
 if not cases:
     st.info("No cases match the current filters.")
 else:

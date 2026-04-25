@@ -12,6 +12,7 @@
     "source": "AIxBio Security Collective",
     "date": "2026-04-18",
     "category": "alert",
+    "severity": "CRITICAL",
     "summary": "A new technique utilizing synonymous codon substitution to evade basic BLAST-based screening has been reported in recent open-weight LLMs.",
     "relevance_to_screening": "Validates the use of function-aware screening. Ensure Synthscreen adapter confidence scores reflect potential synonymous substitutions."
   },
@@ -36,8 +37,18 @@
     "source": "Global Biosecurity Alert Network",
     "date": "2026-04-22",
     "category": "alert",
+    "severity": "MODERATE",
     "summary": "Providers report a 300% increase in queries for optimized viral vector sequences matching restricted taxonomy lists.",
     "relevance_to_screening": "Operators should temporarily elevate the baseline risk tier for novel viral vector sequences."
+  },
+  {
+    "title": "Unrecognized Toxins Synthesized from Foundational Protein Models",
+    "source": "Synthetic Bio Watch",
+    "date": "2026-04-24",
+    "category": "alert",
+    "severity": "CRITICAL",
+    "summary": "Researchers demonstrated that off-the-shelf generative protein models can output functional toxins that have no measurable sequence homology to known databases.",
+    "relevance_to_screening": "All uncharacterized protein sequences showing high 'evasion_potential' must be escalated to a Supervisor."
   },
   {
     "title": "Benchmarking Function-Aware Screening Systems",
@@ -46,5 +57,13 @@
     "category": "research",
     "summary": "A new paper benchmarks Synthscreen and similar models against traditional heuristic screening, showing a 40% reduction in false negatives.",
     "relevance_to_screening": "Supports the core Track 1 methodology. Reference this when discussing model confidence metrics."
+  },
+  {
+    "title": "Advances in Attention-Based Attribution for DNA",
+    "source": "Bioinformatics Today",
+    "date": "2026-04-20",
+    "category": "research",
+    "summary": "Transformers trained on raw nucleotides show unprecedented ability to map pathogenicity to exact base pairs.",
+    "relevance_to_screening": "BioLens sequence highlights rely on this interpretability data for Track 3 operator workflows."
   }
 ]

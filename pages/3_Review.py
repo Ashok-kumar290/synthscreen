@@ -6,6 +6,7 @@ import streamlit as st
 
 from services import bootstrap_application, get_runtime_mode
 from services.constants import ANALYST_STATUSES, FINAL_ACTIONS
+from services.sidebar import render_global_sidebar
 from services.export import build_export_dataset, export_filename, export_screenings_csv, export_screenings_json
 from services.storage import get_screening, list_audit_events, list_screenings, update_review
 from services.ui import (
@@ -25,6 +26,7 @@ from services.ui import (
 st.set_page_config(page_title="BioLens Review", layout="wide")
 bootstrap_application()
 apply_page_style()
+render_global_sidebar()
 
 mode = get_runtime_mode()
 all_cases = list_screenings(limit=250)
@@ -118,17 +120,31 @@ with detail_col:
 
 with review_col:
     st.markdown("#### Analyst Decision")
-    action_options = ["UNSET"] + list(FINAL_ACTIONS)
+    
+    role = st.session_state.get("user_role", "Analyst")
+    is_supervisor = role == "Supervisor"
+
+    if case["risk_level"] == "HIGH" and not is_supervisor:
+        st.warning("⚠️ **HIGH** risk cases require Supervisor approval. You may only Escalate.")
+        available_statuses = ("NEW", "IN_REVIEW", "ESCALATED")
+        available_actions = ("UNSET", "ESCALATE", "HOLD")
+    else:
+        available_statuses = ANALYST_STATUSES
+        available_actions = ("UNSET",) + FINAL_ACTIONS
+
     with st.form("review-form"):
+        current_status = case["analyst_status"] if case["analyst_status"] in available_statuses else available_statuses[0]
         analyst_status = st.selectbox(
             "Analyst status",
-            ANALYST_STATUSES,
-            index=list(ANALYST_STATUSES).index(case["analyst_status"]),
+            available_statuses,
+            index=list(available_statuses).index(current_status),
         )
+        
+        current_action = (case["final_action"] or "UNSET") if (case["final_action"] or "UNSET") in available_actions else available_actions[0]
         final_action = st.selectbox(
             "Final action",
-            action_options,
-            index=action_options.index(case["final_action"] or "UNSET"),
+            available_actions,
+            index=list(available_actions).index(current_action),
         )
         analyst_notes = st.text_area(
             "Analyst notes",
@@ -153,13 +169,27 @@ with review_col:
         st.info("No audit events are recorded for this case yet.")
     else:
         for event in audit_events:
+            if event['event_type'] == "case_created":
+                icon = "📥"
+            elif event['event_type'] == "status_change":
+                icon = "🔄"
+            elif event['event_type'] == "action_set":
+                icon = "⚖️"
+            else:
+                icon = "📝"
+
             detail_text = json.dumps(event["details"], ensure_ascii=True)
             st.markdown(
                 f"""
-<div class="bl-panel bl-audit-entry">
-<strong>{event['event_type']}</strong><br>
-<span class="bl-case-meta">{format_timestamp(event['event_time'])}</span>
-<div class="bl-audit-text">{detail_text}</div>
+<div style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: flex-start;">
+    <div style="font-size: 1.5rem; background: var(--bl-surface); border: 1px solid var(--bl-border); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">{icon}</div>
+    <div class="bl-panel bl-audit-entry" style="flex-grow: 1; margin: 0;">
+        <div style="display: flex; justify-content: space-between;">
+            <strong>{event['event_type'].replace('_', ' ').title()}</strong>
+            <span class="bl-case-meta">{format_timestamp(event['event_time'])}</span>
+        </div>
+        <div class="bl-audit-text" style="margin-top: 0.5rem; color: var(--bl-muted);">{detail_text}</div>
+    </div>
 </div>
                 """,
                 unsafe_allow_html=True,

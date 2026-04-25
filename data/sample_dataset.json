@@ -1,0 +1,362 @@
+[
+  {
+    "id": "sample-safe-001",
+    "submitted_at": "2026-04-18T09:15:00+00:00",
+    "sequence_text": "ATGGCTGCTTCTGGTGCTGCTGCTTCTGGTGACCTGACTGACTAA",
+    "sequence_type": "DNA",
+    "hazard_score": 0.12,
+    "risk_level": "SAFE",
+    "confidence": 0.95,
+    "category": "Routine metabolic gene signature",
+    "explanation": "No significant similarity to pathogenic sequences. Heuristics show typical GC content and codon bias.",
+    "baseline_result": "Baseline similarity check: Routine profile, no alert.",
+    "model_name": "biolens-dataset-loader",
+    "analyst_status": "CLEARED",
+    "analyst_notes": "Standard E. coli metabolic gene.",
+    "final_action": "APPROVE",
+    "reviewed_at": "2026-04-18T10:05:00+00:00",
+    "threat_breakdown": {
+      "pathogenicity": 0.1,
+      "evasion_potential": 0.05,
+      "synthesis_feasibility": 0.95,
+      "environmental_resilience": 0.2,
+      "host_range": 0.1
+    },
+    "attribution_data": {
+      "positions": [3, 9, 15],
+      "scores": [0.1, 0.1, 0.1],
+      "regions": [{"start": 0, "end": 10, "label": "Low risk motif", "score": 0.1}]
+    },
+    "data_source": "biolens-dataset-loader"
+  },
+  {
+    "id": "sample-safe-002",
+    "submitted_at": "2026-04-19T11:22:00+00:00",
+    "sequence_text": "MNSKSLKKKSKLKNKSKLKNKSKLKNK",
+    "sequence_type": "PROTEIN",
+    "hazard_score": 0.15,
+    "risk_level": "SAFE",
+    "confidence": 0.88,
+    "category": "Common cellular maintenance pattern",
+    "explanation": "Short peptide sequence with low complexity. Below hazard threshold.",
+    "baseline_result": "Baseline similarity mock: routine profile, no alert.",
+    "model_name": "biolens-dataset-loader",
+    "analyst_status": "NEW",
+    "analyst_notes": null,
+    "final_action": null,
+    "reviewed_at": null,
+    "threat_breakdown": {
+      "pathogenicity": 0.15,
+      "evasion_potential": 0.1,
+      "synthesis_feasibility": 0.9,
+      "environmental_resilience": 0.25,
+      "host_range": 0.15
+    },
+    "attribution_data": {
+      "positions": [],
+      "scores": [],
+      "regions": []
+    },
+    "data_source": "biolens-dataset-loader"
+  },
+  {
+    "id": "sample-review-001",
+    "submitted_at": "2026-04-20T14:30:00+00:00",
+    "sequence_text": "ATGAAACCGTATATATGCCGCGATGGGACTGACTGACTGACTAA",
+    "sequence_type": "DNA",
+    "hazard_score": 0.65,
+    "risk_level": "REVIEW",
+    "confidence": 0.82,
+    "category": "Regulatory activity worth analyst review",
+    "explanation": "Sequence contains regulatory motifs that occasionally align with known virulence factors.",
+    "baseline_result": "Baseline similarity mock: partial signal overlap, manual review recommended.",
+    "model_name": "biolens-dataset-loader",
+    "analyst_status": "IN_REVIEW",
+    "analyst_notes": "Waiting on client clarification regarding intended use.",
+    "final_action": null,
+    "reviewed_at": null,
+    "threat_breakdown": {
+      "pathogenicity": 0.55,
+      "evasion_potential": 0.45,
+      "synthesis_feasibility": 0.85,
+      "environmental_resilience": 0.4,
+      "host_range": 0.5
+    },
+    "attribution_data": {
+      "positions": [6, 12, 18],
+      "scores": [0.6, 0.7, 0.5],
+      "regions": [{"start": 6, "end": 20, "label": "Regulatory motif overlap", "score": 0.65}]
+    },
+    "data_source": "biolens-dataset-loader"
+  },
+  {
+    "id": "sample-high-001",
+    "submitted_at": "2026-04-21T08:45:00+00:00",
+    "sequence_text": "ATGCGCGCGTTTGGGCGCGCGTTTGGGCGCGCGTTTGGGTAA",
+    "sequence_type": "DNA",
+    "hazard_score": 0.88,
+    "risk_level": "HIGH",
+    "confidence": 0.92,
+    "category": "Elevated host-interaction signature",
+    "explanation": "Strong alignment with restricted pathogen profiles. Elevated evasion potential detected.",
+    "baseline_result": "Baseline similarity mock: inconclusive; function-aware adapter retained a high-priority flag.",
+    "model_name": "biolens-dataset-loader",
+    "analyst_status": "ESCALATED",
+    "analyst_notes": "Sequence structure closely mimics restricted toxin subunit. Escalated to Supervisor.",
+    "final_action": "ESCALATE",
+    "reviewed_at": "2026-04-21T09:15:00+00:00",
+    "threat_breakdown": {
+      "pathogenicity": 0.85,
+      "evasion_potential": 0.78,
+      "synthesis_feasibility": 0.75,
+      "environmental_resilience": 0.6,
+      "host_range": 0.8
+    },
+    "attribution_data": {
+      "positions": [3, 9, 15, 21, 27, 33],
+      "scores": [0.8, 0.9, 0.85, 0.88, 0.9, 0.82],
+      "regions": [{"start": 0, "end": 30, "label": "Host-interaction domain", "score": 0.88}]
+    },
+    "data_source": "biolens-dataset-loader"
+  },
+  {
+    "id": "sample-high-002",
+    "submitted_at": "2026-04-22T16:10:00+00:00",
+    "sequence_text": "MNNQSTVVAGLALALATASAQAAPVVGKKDNNTGAPQATVVSTLQQLAATG",
+    "sequence_type": "PROTEIN",
+    "hazard_score": 0.91,
+    "risk_level": "HIGH",
+    "confidence": 0.89,
+    "category": "High-concern regulation-linked pattern",
+    "explanation": "Heuristic engine identified significant pathogen-associated clusters and low complexity regions.",
+    "baseline_result": "Baseline similarity mock: sequence likely evades BLAST.",
+    "model_name": "biolens-dataset-loader",
+    "analyst_status": "NEW",
+    "analyst_notes": null,
+    "final_action": null,
+    "reviewed_at": null,
+    "threat_breakdown": {
+      "pathogenicity": 0.9,
+      "evasion_potential": 0.85,
+      "synthesis_feasibility": 0.7,
+      "environmental_resilience": 0.8,
+      "host_range": 0.75
+    },
+    "attribution_data": {
+      "positions": [10, 20, 30],
+      "scores": [0.9, 0.95, 0.85],
+      "regions": [{"start": 10, "end": 40, "label": "Pathogenicity cluster", "score": 0.91}]
+    },
+    "data_source": "biolens-dataset-loader"
+  },
+  {
+    "id": "sample-safe-003",
+    "submitted_at": "2026-04-23T09:00:00+00:00",
+    "sequence_text": "ATGGGCGTTACAGGAATATTGCAGTTACCTCGTGATCGATTCAAGAGGACATCATTCTTT",
+    "sequence_type": "DNA",
+    "hazard_score": 0.22,
+    "risk_level": "SAFE",
+    "confidence": 0.94,
+    "category": "Routine metabolic gene signature",
+    "explanation": "No significant pathogenic features detected.",
+    "baseline_result": "Baseline similarity check: Routine profile, no alert.",
+    "model_name": "biolens-dataset-loader",
+    "analyst_status": "NEW",
+    "analyst_notes": null,
+    "final_action": null,
+    "reviewed_at": null,
+    "threat_breakdown": {
+      "pathogenicity": 0.15,
+      "evasion_potential": 0.1,
+      "synthesis_feasibility": 0.9,
+      "environmental_resilience": 0.25,
+      "host_range": 0.2
+    },
+    "attribution_data": {
+      "positions": [],
+      "scores": [],
+      "regions": []
+    },
+    "data_source": "biolens-dataset-loader"
+  },
+  {
+    "id": "sample-safe-004",
+    "submitted_at": "2026-04-23T10:15:00+00:00",
+    "sequence_text": "MRVLKFGGTSVANAERFLRVADILESNARQGQVATVLSAPAKITNHLVAMIEKTISGQDA",
+    "sequence_type": "PROTEIN",
+    "hazard_score": 0.18,
+    "risk_level": "SAFE",
+    "confidence": 0.91,
+    "category": "Common cellular maintenance pattern",
+    "explanation": "Low risk profile.",
+    "baseline_result": "Baseline similarity check: Routine profile, no alert.",
+    "model_name": "biolens-dataset-loader",
+    "analyst_status": "NEW",
+    "analyst_notes": null,
+    "final_action": null,
+    "reviewed_at": null,
+    "threat_breakdown": {
+      "pathogenicity": 0.1,
+      "evasion_potential": 0.15,
+      "synthesis_feasibility": 0.85,
+      "environmental_resilience": 0.2,
+      "host_range": 0.1
+    },
+    "attribution_data": {
+      "positions": [],
+      "scores": [],
+      "regions": []
+    },
+    "data_source": "biolens-dataset-loader"
+  },
+  {
+    "id": "sample-review-002",
+    "submitted_at": "2026-04-24T11:30:00+00:00",
+    "sequence_text": "ATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGC",
+    "sequence_type": "DNA",
+    "hazard_score": 0.61,
+    "risk_level": "REVIEW",
+    "confidence": 0.78,
+    "category": "Unresolved signaling-like pattern",
+    "explanation": "Repetitive motif requires manual verification to rule out evasion attempt.",
+    "baseline_result": "Baseline similarity check: partial signal overlap.",
+    "model_name": "biolens-dataset-loader",
+    "analyst_status": "NEW",
+    "analyst_notes": null,
+    "final_action": null,
+    "reviewed_at": null,
+    "threat_breakdown": {
+      "pathogenicity": 0.4,
+      "evasion_potential": 0.75,
+      "synthesis_feasibility": 0.9,
+      "environmental_resilience": 0.3,
+      "host_range": 0.4
+    },
+    "attribution_data": {
+      "positions": [4, 8, 12, 16],
+      "scores": [0.5, 0.5, 0.5, 0.5],
+      "regions": [{"start": 0, "end": 20, "label": "Repetitive GC motif", "score": 0.6}]
+    },
+    "data_source": "biolens-dataset-loader"
+  },
+  {
+    "id": "sample-safe-005",
+    "submitted_at": "2026-04-24T14:45:00+00:00",
+    "sequence_text": "ATGGCTGCTTCTGGTGCTGCTGCTTCTGGTGACCTGACTGACTAA",
+    "sequence_type": "DNA",
+    "hazard_score": 0.14,
+    "risk_level": "SAFE",
+    "confidence": 0.96,
+    "category": "Routine metabolic gene signature",
+    "explanation": "No concern.",
+    "baseline_result": "Baseline similarity check: Routine profile, no alert.",
+    "model_name": "biolens-dataset-loader",
+    "analyst_status": "CLEARED",
+    "analyst_notes": "Duplicate check passed.",
+    "final_action": "APPROVE",
+    "reviewed_at": "2026-04-24T15:00:00+00:00",
+    "threat_breakdown": {
+      "pathogenicity": 0.1,
+      "evasion_potential": 0.05,
+      "synthesis_feasibility": 0.95,
+      "environmental_resilience": 0.2,
+      "host_range": 0.1
+    },
+    "attribution_data": {
+      "positions": [],
+      "scores": [],
+      "regions": []
+    },
+    "data_source": "biolens-dataset-loader"
+  },
+  {
+    "id": "sample-high-003",
+    "submitted_at": "2026-04-25T08:20:00+00:00",
+    "sequence_text": "MKTIIALSYIFCLVFAKTGGTCACAGGAATATTGCAGTTACCTC",
+    "sequence_type": "PROTEIN",
+    "hazard_score": 0.95,
+    "risk_level": "HIGH",
+    "confidence": 0.98,
+    "category": "Toxin-associated structural pattern",
+    "explanation": "Sequence structurally matches known controlled substance segments.",
+    "baseline_result": "Baseline similarity mock: sequence aligns with controlled taxonomy.",
+    "model_name": "biolens-dataset-loader",
+    "analyst_status": "CLEARED",
+    "analyst_notes": "Supervisor verified customer credentials. Approved for synthesis under strict protocol.",
+    "final_action": "APPROVE",
+    "reviewed_at": "2026-04-25T09:10:00+00:00",
+    "threat_breakdown": {
+      "pathogenicity": 0.95,
+      "evasion_potential": 0.6,
+      "synthesis_feasibility": 0.8,
+      "environmental_resilience": 0.7,
+      "host_range": 0.9
+    },
+    "attribution_data": {
+      "positions": [5, 10, 15],
+      "scores": [0.9, 0.95, 0.98],
+      "regions": [{"start": 0, "end": 20, "label": "Toxin signature match", "score": 0.95}]
+    },
+    "data_source": "biolens-dataset-loader"
+  },
+  {
+    "id": "sample-review-003",
+    "submitted_at": "2026-04-25T10:05:00+00:00",
+    "sequence_text": "ATGGGCGTTACAGGAATATTGCAGTTACCTCGTGATCGATTCAAG",
+    "sequence_type": "DNA",
+    "hazard_score": 0.68,
+    "risk_level": "REVIEW",
+    "confidence": 0.81,
+    "category": "Unresolved signaling-like pattern",
+    "explanation": "Elevated pathogenicity risk due to specific GC-rich domains.",
+    "baseline_result": "Baseline similarity check: inconclusive.",
+    "model_name": "biolens-dataset-loader",
+    "analyst_status": "ESCALATED",
+    "analyst_notes": "Cannot determine intent from sequence alone. Escalating.",
+    "final_action": "ESCALATE",
+    "reviewed_at": "2026-04-25T10:25:00+00:00",
+    "threat_breakdown": {
+      "pathogenicity": 0.7,
+      "evasion_potential": 0.5,
+      "synthesis_feasibility": 0.85,
+      "environmental_resilience": 0.4,
+      "host_range": 0.5
+    },
+    "attribution_data": {
+      "positions": [10, 20],
+      "scores": [0.7, 0.75],
+      "regions": [{"start": 5, "end": 25, "label": "GC-rich domain", "score": 0.68}]
+    },
+    "data_source": "biolens-dataset-loader"
+  },
+  {
+    "id": "sample-safe-006",
+    "submitted_at": "2026-04-25T11:40:00+00:00",
+    "sequence_text": "MVHLTPEEKSAVTALWGKVNVDEVGGEALGRLLVVYPWTQRFFE",
+    "sequence_type": "PROTEIN",
+    "hazard_score": 0.11,
+    "risk_level": "SAFE",
+    "confidence": 0.98,
+    "category": "Routine metabolic gene signature",
+    "explanation": "Standard human hemoglobin alpha subunit fragment.",
+    "baseline_result": "Baseline similarity check: Routine profile, no alert.",
+    "model_name": "biolens-dataset-loader",
+    "analyst_status": "NEW",
+    "analyst_notes": null,
+    "final_action": null,
+    "reviewed_at": null,
+    "threat_breakdown": {
+      "pathogenicity": 0.05,
+      "evasion_potential": 0.05,
+      "synthesis_feasibility": 0.98,
+      "environmental_resilience": 0.2,
+      "host_range": 0.1
+    },
+    "attribution_data": {
+      "positions": [],
+      "scores": [],
+      "regions": []
+    },
+    "data_source": "biolens-dataset-loader"
+  }
+]

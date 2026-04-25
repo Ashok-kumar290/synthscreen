@@ -26,8 +26,8 @@ RISK_COLORS = {
 }
 
 DATA_SOURCE_STYLES = {
-    "synthguard-api": {"bg": "#dff1fb", "fg": "#0f5a85", "label": "SynthGuard AI"},
-    "biolens-heuristic": {"bg": "#fff2db", "fg": "#8a4c00", "label": "BioLens Heuristic"},
+    "synthguard-api": {"bg": "#dff1fb", "fg": "#0f5a85", "label": "Real API (SynthGuard)"},
+    "biolens-heuristic": {"bg": "#fff2db", "fg": "#8a4c00", "label": "Local Mock (Heuristic)"},
     "biolens-mock": {"bg": "#eef2f4", "fg": "#475865", "label": "Mock Data"},
     "biolens-demo": {"bg": "#eef2f4", "fg": "#475865", "label": "Demo Data"},
 }

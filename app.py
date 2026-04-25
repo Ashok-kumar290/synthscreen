@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
+
 import streamlit as st
 
 from services import bootstrap_application, get_runtime_mode
 from services.export import build_export_dataset, export_filename, export_screenings_csv, export_screenings_json
-from services.seed_data import ensure_demo_cases
+from services.sidebar import render_global_sidebar
 from services.storage import analytics_snapshot, list_screenings
 from services.ui import (
     action_badge,
@@ -26,11 +28,17 @@ snapshot = analytics_snapshot()
 recent_cases = list_screenings(limit=5)
 export_records = build_export_dataset()
 
-render_hero(
-    "BioLens",
-    "Operational dashboard for function-aware biosecurity screening. Built for intake, triage, review, analytics, and reporting on top of the Synthscreen adapter layer.",
-    mode,
-)
+current_role = st.session_state.get("user_role", "Analyst")
+
+if current_role == "Supervisor":
+    hero_title = "BioLens Supervisor Desk"
+    hero_desc = "Review escalated cases, approve final synthesis authorizations, and audit analyst triage activity."
+else:
+    hero_title = "BioLens Analyst Triage"
+    hero_desc = "Process inbound sequences, verify Synthscreen heuristics, and escalate flagged risk profiles."
+
+render_hero(hero_title, hero_desc, mode)
+
 
 metric_columns = st.columns(4)
 with metric_columns[0]:
@@ -42,38 +50,7 @@ with metric_columns[2]:
 with metric_columns[3]:
     render_metric_card("Average hazard", f"{snapshot['average_hazard_score']:.2f}", "Across all saved cases")
 
-sidebar_export_csv = export_screenings_csv(export_records)
-sidebar_export_json = export_screenings_json(export_records)
-
-with st.sidebar:
-    st.subheader("Runtime")
-    st.write(f"`BIOLENS_MODE={mode}`")
-    if st.button("Load Demo Cases", use_container_width=True):
-        result = ensure_demo_cases()
-        st.success(f"Demo data synced. Inserted {result['inserted']} case(s).")
-
-    st.subheader("Navigate")
-    st.page_link("pages/1_Screening.py", label="Open Screening")
-    st.page_link("pages/2_Inbox.py", label="Open Inbox")
-    st.page_link("pages/3_Review.py", label="Open Review")
-    st.page_link("pages/4_Analytics.py", label="Open Analytics")
-    st.page_link("pages/5_Intelligence.py", label="Open Intelligence")
-
-    st.subheader("Export")
-    st.download_button(
-        "Download All Cases (CSV)",
-        data=sidebar_export_csv,
-        file_name=export_filename("biolens_cases", "csv"),
-        mime="text/csv",
-        use_container_width=True,
-    )
-    st.download_button(
-        "Download All Cases (JSON)",
-        data=sidebar_export_json,
-        file_name=export_filename("biolens_cases", "json"),
-        mime="application/json",
-        use_container_width=True,
-    )
+render_global_sidebar()
 
 overview_left, overview_right = st.columns([1.15, 0.85], gap="large")
 

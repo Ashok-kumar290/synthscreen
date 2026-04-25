@@ -105,6 +105,14 @@ def init_db() -> None:
         connection.commit()
 
 
+def reset_database() -> None:
+    """Delete and re-create the screening database."""
+    db_path = get_db_path()
+    if db_path.exists():
+        db_path.unlink()
+    init_db()
+
+
 def _normalize_screening_record(record: dict[str, Any]) -> dict[str, Any]:
     risk_level = str(record["risk_level"])
     if risk_level not in RISK_LEVELS:
@@ -361,6 +369,19 @@ def update_review(
         connection.commit()
 
     return get_screening(screening_id)
+
+
+def bulk_update_status(
+    screening_ids: list[str],
+    analyst_status: str,
+    final_action: str | None,
+) -> int:
+    """Update multiple screenings at once. Returns count of updated rows."""
+    updated = 0
+    for sid in screening_ids:
+        update_review(sid, analyst_status, None, final_action)
+        updated += 1
+    return updated
 
 
 def count_screenings() -> int:

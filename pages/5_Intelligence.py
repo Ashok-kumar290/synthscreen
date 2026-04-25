@@ -5,10 +5,12 @@ from pathlib import Path
 
 import streamlit as st
 
+from services.sidebar import render_global_sidebar
 from services.ui import apply_page_style
 
 st.set_page_config(page_title="BioLens - Intelligence", layout="wide")
 apply_page_style()
+render_global_sidebar()
 
 st.title("Threat Intelligence")
 st.markdown("Live policy updates and emerging biosecurity alerts.")
@@ -60,12 +62,14 @@ else:
         if not alerts:
             st.markdown("<p style='color: var(--bl-muted);'>No active alerts.</p>", unsafe_allow_html=True)
         for a in alerts:
+            severity = a.get("severity", "INFO")
+            sev_color = "#c0392b" if severity == "CRITICAL" else "#e67e22" if severity == "MODERATE" else "#3498db"
             st.markdown(
                 f"""
-<div class="bl-case-card" style="border-left: 4px solid #e74c3c;">
+<div class="bl-case-card" style="border-left: 4px solid {sev_color};">
 <div class="bl-case-row">
 <div>
-<div class="bl-case-title" style="color: #c0392b;">{a['title']}</div>
+<div class="bl-case-title" style="color: {sev_color};">[{severity}] {a['title']}</div>
 <div class="bl-case-meta">{a['date']} • {a['source']}</div>
 </div>
 </div>

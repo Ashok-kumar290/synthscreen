@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import os
 from datetime import datetime
 from typing import Any
 
@@ -10,6 +11,7 @@ from services import bootstrap_application, get_runtime_mode
 from services.model_interface import screen_sequence
 from services.storage import save_screening_case
 from services.constants import RISK_COLORS
+from services.sidebar import render_global_sidebar
 from services.ui import (
     apply_page_style,
     format_timestamp,
@@ -83,25 +85,26 @@ def render_result_card(item: dict[str, Any]) -> None:
 </div>
         """
     st.markdown(card_html.replace("\n", " "), unsafe_allow_html=True)
-    with st.expander("▶ Show Full Analysis"):
-        col1, col2 = st.columns([1.1, 0.9], gap="large")
-        with col1:
-            st.markdown("#### Structured Threat Assessment")
-            render_threat_bars(result.get("threat_breakdown"))
-        with col2:
-            st.markdown("#### Baseline Comparison")
-            if result.get("baseline_result"):
-                st.info(result["baseline_result"])
-            else:
-                st.markdown("<p style='color: var(--bl-muted); font-size: 0.9rem;'>No baseline comparison available.</p>", unsafe_allow_html=True)
-                
-        st.markdown("#### Sequence Highlight")
-        render_attributed_sequence(item["sequence"], result.get("attribution_data"))
+    
+    col1, col2 = st.columns([1.1, 0.9], gap="large")
+    with col1:
+        st.markdown("#### Structured Threat Assessment")
+        render_threat_bars(result.get("threat_breakdown"))
+    with col2:
+        st.markdown("#### Baseline Comparison")
+        if result.get("baseline_result"):
+            st.info(result["baseline_result"])
+        else:
+            st.markdown("<p style='color: var(--bl-muted); font-size: 0.9rem;'>No baseline comparison available.</p>", unsafe_allow_html=True)
+            
+    st.markdown("#### Sequence Highlight")
+    render_attributed_sequence(item["sequence"], result.get("attribution_data"))
 
 
 st.set_page_config(page_title="BioLens Screening", layout="wide")
 bootstrap_application()
 apply_page_style()
+render_global_sidebar()
 
 mode = get_runtime_mode()
 saved_case_ids = st.session_state.pop("saved_case_ids", [])
@@ -159,11 +162,13 @@ with input_col:
 
 with guide_col:
     st.subheader("Run Mode")
+    endpoint_display = os.environ.get("SYNTHSCREEN_ENDPOINT", "https://seyomi-synthguard-api.hf.space/biolens/screen")
     card_html = f"""
 <div class="bl-panel">
-<p><strong>Integrated</strong> forwards DNA requests to a live Track 1 SynthGuard endpoint. Protein requests transparently use the local BioLens heuristic engine.</p>
-<p><strong>Demo</strong> auto-loads representative cases and uses local heuristic generation.</p>
+<p><strong>Integrated</strong> forwards DNA requests to a live Track 1 API (currently set to <code>{html.escape(endpoint_display)}</code>). Protein requests transparently use the local mock engine.</p>
+<p><strong>Mock/Demo</strong> uses local mock generation.</p>
 <p>Current Mode: <strong style="color: var(--bl-accent);">{mode.upper()}</strong></p>
+<p style="font-size: 0.85rem; color: var(--bl-muted); margin-top: 0.5rem;">To change the API endpoint or switch to mock mode, visit the ⚙️ System Admin settings on the main overview page.</p>
 </div>
 """
     st.markdown(card_html.replace("\n", " "), unsafe_allow_html=True)

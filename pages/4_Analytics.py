@@ -5,12 +5,14 @@ import streamlit as st
 
 from services import bootstrap_application, get_runtime_mode
 from services.storage import analytics_snapshot
+from services.sidebar import render_global_sidebar
 from services.ui import apply_page_style, render_hero, render_metric_card
 
 
 st.set_page_config(page_title="BioLens Analytics", layout="wide")
 bootstrap_application()
 apply_page_style()
+render_global_sidebar()
 
 mode = get_runtime_mode()
 snapshot = analytics_snapshot()
