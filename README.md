@@ -1,45 +1,120 @@
 # SynthGuard & BioLens: Unified Biosecurity Screening
 
-This repository contains the full submission for the Biosecurity Hackathon. Our project addresses the critical need for robust, scalable, and intelligent biosecurity screening to prevent the synthesis of potentially hazardous biological agents.
+> A function-aware ML screening engine (Track 1) + practitioner dashboard with pandemic intelligence (Track 3) — built for the AIxBio Hackathon 2026.
 
-## Project Overview
+**[Live Demo](https://biolens.streamlit.app)** &nbsp;|&nbsp; **[Interactive Docs](docs/index.html)** &nbsp;|&nbsp; **[Full Report](report/funcscreen-report.md)** &nbsp;|&nbsp; **[Submission](docs/hackathon-submission.md)**
 
-Our solution is a multi-track integration that spans from low-level sequence screening to high-level pandemic intelligence and operator triage.
+---
 
-### Track 1: SynthGuard DNA/Protein Screening Backend
-- **Core Engine**: A high-performance screening backend that evaluates DNA and protein sequences against known pathogen databases and functional signatures.
-- **Model Work**: Implements advanced sequence alignment and functional annotation to detect "de-novo" or modified sequences that traditional tools might miss.
-- **Branch**: `master` (contains the core backend and model logic).
+## The Problem
 
-### Track 2: Early Pandemic Intelligence Signals
-- **Intelligence Layer**: Aggregates early signals of pandemic potential from global health data, watchlists, and environmental monitoring.
-- **Integration**: These signals are fed directly into the BioLens dashboard to provide operators with real-time situational awareness.
-- **Implementation**: Integrated into the `Intelligence` module of the dashboard.
+Current biosecurity screening has two critical gaps:
 
-### Track 3: BioLens Unified Biosecurity Dashboard
-- **Operator Surface**: A Streamlit-based unified dashboard for biosecurity analysts.
-- **Features**: Triage sequences, review automated alerts, analyze global risk trends, and manage pandemic intelligence signals.
-- **Branch**: `main` (Showcase) / `track3/biolens`.
+1. **AI-designed protein variants** share dangerous function but evade similarity-based detection (BLAST, IBBIS)
+2. **Short-sequence false positives** inflate manual review cost, slowing analysts on legitimate samples
+
+BioLens + SynthGuard address both — with a complementary ML triage layer and a unified operator workflow.
+
+---
+
+## Performance (Track 1 — SynthGuard)
+
+| Metric | SynthGuard | BLAST Baseline |
+|--------|:----------:|:--------------:|
+| Hazard Detection — Novel Variants | **98%** | ~62% |
+| Chimeric Sequence Resistance | **86%** | 48% |
+| AI-Redesigned Sequence Detection | **84%** | ~41% |
+
+---
+
+## Architecture
+
+```
+  DNA / Protein Sequence Input
+           │
+           ▼
+  ┌────────────────────┐
+  │  SynthGuard        │  Track 1 — ESM-2 650M + LoRA (protein)
+  │  Screening Engine  │           K-mer Random Forest (DNA)
+  └────────┬───────────┘
+           │  risk score + evidence
+           ▼
+  ┌────────────────────┐
+  │  BioLens           │  Track 3 — Streamlit dashboard
+  │  Dashboard         │           SQLite case management
+  │  ┌──────────────┐  │           Audit trail + export
+  │  │ Intelligence │  │
+  │  │ Feed (T2)    │  │  Track 2 — Outbreak alerts, watchlists,
+  │  └──────────────┘  │           regulatory updates
+  └────────────────────┘
+```
+
+---
+
+## Judge Demo Path
+
+| Step | Page | What to see |
+|------|------|-------------|
+| 1 | **Home** | Global threat posture, live activity feed, regional risk map |
+| 2 | **Screening** | Paste a sequence → risk score, evidence, residue highlights |
+| 3 | **Inbox → Review** | Triage case, update status, log analyst decision |
+| 4 | **Analytics** | Hazard distribution, response time charts, queue metrics |
+| 5 | **Intelligence** | Active outbreak alerts, watchlist hits, policy updates |
+
+---
+
+## Quick Start
+
+```bash
+# Docker (recommended — no setup needed)
+docker compose up --build
+# → open http://localhost:8501
+
+# Local (Python 3.11+)
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Set `BIOLENS_MODE=demo` to pre-seed all cases and intelligence data (default in Docker).
+
+---
+
+## Repository Structure
+
+```
+funcscreen/
+├── app.py                    # BioLens entry point (home dashboard)
+├── pages/                    # 8 Streamlit pages (Screening → Reports)
+├── services/                 # Backend: storage, intelligence, export, model adapter
+├── data/                     # SQLite DB, demo cases, intelligence feeds
+├── scripts/training/         # Track 1: ESM-2 LoRA + K-mer RF training scripts
+├── configs/                  # Track 1: model training configs
+├── report/                   # Full technical research report
+└── docs/
+    ├── index.html            # Interactive showcase (start here)
+    ├── track1/README.md      # SynthGuard screening engine docs
+    ├── track2/README.md      # Pandemic intelligence layer docs
+    ├── track3/               # BioLens dashboard docs + integration contract
+    └── hackathon-submission.md
+```
+
+---
 
 ## Branch Mapping
 
-- **`main`**: The canonical showcase branch. Contains the runnable BioLens dashboard and project overview. **(Start here for judging)**
-- **`track3/biolens`**: Permanent branch for Track 3 implementation and dashboard development.
-- **`master`**: Track 1 backend and model development branch.
-
-## Quick Start (Local Demo)
-
-The entire BioLens dashboard, including integrated Track 1 and Track 2 features, can be run locally using Docker:
-
-```bash
-docker compose up --build
-```
-
-Access the dashboard at [http://localhost:8501](http://localhost:8501).
+| Branch | Contents |
+|--------|----------|
+| **`main`** | Canonical showcase — BioLens dashboard + all track assets. **Start here for judging.** |
+| `track3/biolens` | Track 3 development history |
+| `master` | Track 1 model development history |
 
 ---
 
 ## Documentation
 
-- [Hackathon Submission Detailed Report](docs/hackathon-submission.md)
-- [Track 3 Detailed Documentation](docs/track3/README.md)
+- **[docs/index.html](docs/index.html)** — Interactive showcase with track cards and demo path
+- **[docs/track1/README.md](docs/track1/README.md)** — SynthGuard model architecture, metrics, quick-start
+- **[docs/track2/README.md](docs/track2/README.md)** — Pandemic intelligence layer and data format
+- **[docs/track3/README.md](docs/track3/README.md)** — BioLens dashboard features and integration contract
+- **[report/funcscreen-report.md](report/funcscreen-report.md)** — Full technical research report
+- **[docs/hackathon-submission.md](docs/hackathon-submission.md)** — Hackathon submission report

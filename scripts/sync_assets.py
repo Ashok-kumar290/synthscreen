@@ -1,0 +1,1 @@
+from huggingface_hub import snapshot_download\nimport os\n\ndef sync():\n    snapshot_download(repo_id='Ashok-kumar290/funcscreen-models', local_dir='models/')\n    snapshot_download(repo_id='Ashok-kumar290/funcscreen-data', local_dir='data/processed/', repo_type='dataset')\n\nif __name__ == '__main__':\n    sync()

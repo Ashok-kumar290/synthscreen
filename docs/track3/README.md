@@ -33,6 +33,15 @@ It specifically addresses the operational needs of biosecurity analysts by abstr
 - **Deployment Modes:** Supports `Mock` mode for UI development, `Demo` mode with pre-loaded representative data, and `Integrated` mode to actually hit the Synthscreen model.
 - **Offline Support:** Includes SQLite integration and Docker configuration, making it fully ready for offline, low-resource environments.
 
+## Integration with Other Tracks
+
+BioLens is the practitioner surface for the full three-track ecosystem:
+
+- **Track 1 (SynthGuard):** The sequence risk scoring engine behind the Screening page. BioLens calls it via `services/model_interface.py` — see [`docs/track1/README.md`](../track1/README.md) and [`integration_contract.md`](integration_contract.md) for the adapter spec.
+- **Track 2 (Pandemic Intelligence):** Early-warning signals displayed on the Intelligence page. See [`docs/track2/README.md`](../track2/README.md) for the data format and feed architecture.
+
+In `demo` mode, both the SynthGuard screening results and the intelligence feed run from pre-seeded local data — no external service needed.
+
 ## Directory Structure
 
 - `app.py`: The main entry point and high-level dashboard overview.

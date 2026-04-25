@@ -1,0 +1,1 @@
+from huggingface_hub import HfApi\nimport os\n\ndef upload():\n    api = HfApi()\n    api.upload_folder(folder_path='models/', repo_id='Ashok-kumar290/funcscreen-models')\n    api.upload_folder(folder_path='data/processed/', repo_id='Ashok-kumar290/funcscreen-data', repo_type='dataset')\n\nif __name__ == '__main__':\n    upload()
