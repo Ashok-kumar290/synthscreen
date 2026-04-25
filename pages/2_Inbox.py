@@ -7,7 +7,7 @@ from services.constants import ANALYST_STATUSES, RISK_LEVELS
 from services.sidebar import render_global_sidebar
 from services.export import build_export_dataset, export_filename, export_screenings_csv, export_screenings_json
 from services.storage import list_screenings
-from services.intelligence import get_case_intelligence
+from services.intelligence import get_case_intelligence, get_cases_with_intelligence_links
 from services.ui import (
     apply_page_style,
     format_timestamp,
@@ -28,6 +28,7 @@ render_hero(
     "Case Inbox",
     "Review the saved screening queue, filter by operational state, sort by priority, and route a case into detailed review.",
     mode,
+    compact=True,
 )
 
 current_role = st.session_state.get("user_role", "Analyst")
@@ -68,20 +69,13 @@ cases = list_screenings(
     descending=descending,
 )
 
-# Build intel lookup if needed
-if intel_only:
-    intel_case_ids = set()
-    for case in cases:
-        links = get_case_intelligence(case["id"])
-        if links:
-            intel_case_ids.add(case["id"])
-    cases = [c for c in cases if c["id"] in intel_case_ids]
+# Bulk-fetch intel flags in a single query (O(1) instead of O(N))
+all_case_ids = [case["id"] for case in cases]
+_intel_flag_ids: set[str] = get_cases_with_intelligence_links(all_case_ids)
 
-# Pre-fetch intel links for badge rendering (only first 50 to avoid slowdown)
-_intel_flag_ids: set[str] = set()
-for case in cases[:50]:
-    if get_case_intelligence(case["id"]):
-        _intel_flag_ids.add(case["id"])
+# Apply intel_only filter using the pre-computed set
+if intel_only:
+    cases = [c for c in cases if c["id"] in _intel_flag_ids]
 
 filtered_export = build_export_dataset([case["id"] for case in cases])
 

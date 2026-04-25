@@ -78,3 +78,24 @@ ACTION_STYLES = {
     "UNSET": {"bg": "#eef2f4", "fg": "#475865"},
     "OFFLINE": {"bg": "#eef2f4", "fg": "#475865"},
 }
+
+UI_MODES = ("compact", "full")
+
+COMPACT_PAGES = [
+    ("app.py", "Home"),
+    ("pages/1_Screening.py", "Screening"),
+    ("pages/2_Inbox.py", "Inbox"),
+    ("pages/3_Review.py", "Review"),
+]
+
+FULL_PAGES = [
+    ("app.py", "Home"),
+    ("pages/1_Screening.py", "Screening"),
+    ("pages/2_Inbox.py", "Inbox"),
+    ("pages/3_Review.py", "Review"),
+    ("pages/4_Analytics.py", "Analytics"),
+    ("pages/5_Intelligence.py", "Intelligence"),
+    ("pages/6_Archive.py", "Archive"),
+    ("pages/7_Automation.py", "Automation"),
+    ("pages/8_Reports.py", "Reports"),
+]

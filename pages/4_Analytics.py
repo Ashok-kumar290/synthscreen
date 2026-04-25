@@ -9,7 +9,7 @@ from services.dashboard import get_response_time_metrics
 from services.intelligence import get_alert_statistics, get_alert_timeline, get_watchlist_effectiveness
 from services.sidebar import render_global_sidebar
 from services.storage import analytics_snapshot, response_time_distribution
-from services.ui import apply_page_style, render_hero, render_metric_card, render_response_time_chart
+from services.ui import apply_page_style, render_hero, render_metric_card, render_response_time_chart, chart_font_color
 
 
 st.set_page_config(page_title="BioLens Analytics", layout="wide")
@@ -25,6 +25,7 @@ render_hero(
     "Analytics",
     "Operational metrics from persisted SQLite records, correlated with active intelligence signals for a unified picture of biosecurity activity.",
     mode,
+    compact=True,
 )
 
 # ── Top metrics ────────────────────────────────────────────────────────────────
@@ -62,12 +63,15 @@ with upper_left:
             y=risk_df["count"],
             marker_color=[colors.get(r, "#8899a6") for r in risk_df["risk_level"]],
         ))
+        _fc = chart_font_color()
         fig.update_layout(
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color=_fc),
             height=260, margin=dict(l=10, r=10, t=10, b=30),
-            yaxis=dict(gridcolor="rgba(0,0,0,0.05)"), xaxis=dict(showgrid=False),
+            yaxis=dict(gridcolor="rgba(0,0,0,0.05)", tickfont=dict(color=_fc)),
+            xaxis=dict(showgrid=False, tickfont=dict(color=_fc)),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 with upper_right:
     st.markdown("#### Status Distribution")
@@ -121,17 +125,19 @@ if not activity_df.empty:
             marker=dict(size=6),
             yaxis="y2",
         ))
+    _fc = chart_font_color()
     corr_fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=_fc),
         height=280,
         margin=dict(l=10, r=60, t=10, b=30),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02),
-        yaxis=dict(title="Screenings", gridcolor="rgba(0,0,0,0.05)", side="left"),
-        yaxis2=dict(title="New Alerts", overlaying="y", side="right", showgrid=False),
-        xaxis=dict(showgrid=False),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, font=dict(color=_fc)),
+        yaxis=dict(title="Screenings", gridcolor="rgba(0,0,0,0.05)", side="left", tickfont=dict(color=_fc)),
+        yaxis2=dict(title="New Alerts", overlaying="y", side="right", showgrid=False, tickfont=dict(color=_fc)),
+        xaxis=dict(showgrid=False, tickfont=dict(color=_fc)),
     )
-    st.plotly_chart(corr_fig, use_container_width=True)
+    st.plotly_chart(corr_fig, width="stretch")
 else:
     st.info("No screening activity data to correlate yet.")
 
@@ -148,12 +154,15 @@ with intel_left:
             y=by_sev["count"],
             marker_color=[sev_colors.get(s, "#8899a6") for s in by_sev["severity"]],
         ))
+        _fc = chart_font_color()
         fig3.update_layout(
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color=_fc),
             height=220, margin=dict(l=10, r=10, t=10, b=30),
-            yaxis=dict(gridcolor="rgba(0,0,0,0.05)"), xaxis=dict(showgrid=False),
+            yaxis=dict(gridcolor="rgba(0,0,0,0.05)", tickfont=dict(color=_fc)),
+            xaxis=dict(showgrid=False, tickfont=dict(color=_fc)),
         )
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width="stretch")
     else:
         st.info("No alert data.")
 
@@ -164,7 +173,7 @@ with intel_right:
         eff_df = pd.DataFrame(eff)
         show_cols = ["keyword", "priority", "match_count", "approved", "held", "escalated"]
         available = [c for c in show_cols if c in eff_df.columns]
-        st.dataframe(eff_df[available], hide_index=True, use_container_width=True)
+        st.dataframe(eff_df[available], hide_index=True, width="stretch")
     else:
         st.info("No watchlist items or case matches recorded yet.")
 
@@ -195,5 +204,5 @@ else:
     st.dataframe(
         recent_flagged_df[["id", "risk_level", "hazard_score", "analyst_status", "category", "submitted_at"]],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )

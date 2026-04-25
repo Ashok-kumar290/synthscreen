@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import os
 from datetime import datetime
 from typing import Any
 
@@ -8,6 +9,91 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from services.constants import ACTION_STYLES, RISK_STYLES, STATUS_STYLES, RISK_COLORS, DATA_SOURCE_STYLES
+
+_DARK_CSS = """<style>
+:root {
+    --bl-ink: #dce6f0 !important;
+    --bl-muted: #8899a6 !important;
+    --bl-panel: rgba(20, 30, 44, 0.94) !important;
+    --bl-panel-strong: rgba(26, 38, 54, 0.95) !important;
+    --bl-border: rgba(255, 255, 255, 0.09) !important;
+    --bl-accent: #4da6d8 !important;
+    --bl-accent-soft: rgba(77, 166, 216, 0.14) !important;
+    --bl-shadow: 0 18px 48px rgba(0, 0, 0, 0.30) !important;
+}
+html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stApp"] {
+    background:
+        radial-gradient(circle at top left, rgba(60,100,140,0.10), transparent 34%),
+        linear-gradient(180deg, #0c1520 0%, #101928 48%, #131f2d 100%) !important;
+    color: #dce6f0 !important;
+}
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, rgba(11,17,27,0.99), rgba(14,22,34,0.98)) !important;
+    border-right: 1px solid rgba(255,255,255,0.07) !important;
+}
+.block-container { background: transparent !important; }
+.bl-sequence-preview { background: rgba(255,255,255,0.05) !important; color: #a0b4c6 !important; }
+.bl-mode-chip {
+    background: rgba(18,28,44,0.97) !important;
+    border-color: rgba(255,255,255,0.13) !important;
+    color: #4da6d8 !important;
+}
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stNumberInput"] input {
+    background-color: rgba(255,255,255,0.06) !important;
+    color: #dce6f0 !important;
+    border-color: rgba(255,255,255,0.12) !important;
+}
+[data-testid="stTextInput"] input::placeholder,
+[data-testid="stTextArea"] textarea::placeholder { color: rgba(220,230,240,0.35) !important; }
+[data-baseweb="select"] { background-color: rgba(255,255,255,0.06) !important; }
+[data-testid="stForm"] { border-color: rgba(255,255,255,0.09) !important; }
+details[data-testid="stExpander"] {
+    border-color: rgba(255,255,255,0.09) !important;
+    background: rgba(20,30,44,0.5) !important;
+}
+[data-testid="stCaption"] p { color: #8899a6 !important; }
+[data-testid="stMarkdownContainer"] p { color: #dce6f0 !important; }
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3 { color: #eef4fa !important; }
+[data-testid="stRadio"] p, [data-testid="stCheckbox"] p { color: #c8d8e8 !important; }
+[data-testid="baseButton-secondary"], [data-testid="baseButton-tertiary"] {
+    background: rgba(255,255,255,0.08) !important;
+    color: #dce6f0 !important;
+    border-color: rgba(255,255,255,0.14) !important;
+}
+</style>"""
+
+
+def chart_font_color() -> str:
+    return "#c0d0e0"
+
+
+def _inject_theme_css() -> None:
+    st.markdown(_DARK_CSS, unsafe_allow_html=True)
+
+
+def render_mode_chip() -> None:
+    """Handle UI mode query param from chip clicks and render the floating mode chip."""
+    from services import get_ui_mode
+
+    qp_mode = st.query_params.get("ui_mode")
+    if qp_mode in ("compact", "full"):
+        os.environ["BIOLENS_UI_MODE"] = qp_mode
+        del st.query_params["ui_mode"]
+        st.rerun()
+
+    ui_mode = get_ui_mode()
+    next_mode = "full" if ui_mode == "compact" else "compact"
+    chip_label = "Compact" if ui_mode == "compact" else "Full"
+
+    st.markdown(
+        f'<a href="?ui_mode={next_mode}" class="bl-mode-chip" title="Switch to {next_mode} view">{chip_label}</a>',
+        unsafe_allow_html=True,
+    )
+
 
 def apply_page_style() -> None:
     st.markdown(
@@ -55,6 +141,7 @@ def apply_page_style() -> None:
                 border-right: 1px solid var(--bl-border);
             }
 
+            /* Dark mode overrides */
             @media (prefers-color-scheme: dark) {
                 html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
                     background:
@@ -65,6 +152,10 @@ def apply_page_style() -> None:
                     background:
                         linear-gradient(180deg, rgba(18, 26, 33, 0.98), rgba(22, 31, 41, 0.96));
                 }
+                .bl-sequence-preview {
+                    background: rgba(255, 255, 255, 0.05);
+                    color: #b0c0cc;
+                }
             }
 
             .block-container {
@@ -74,27 +165,19 @@ def apply_page_style() -> None:
             }
 
             .bl-hero {
-                background:
-                    linear-gradient(135deg, rgba(16, 90, 133, 0.94), rgba(31, 70, 94, 0.9)),
-                    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0));
-                border: 1px solid rgba(255, 255, 255, 0.18);
-                border-radius: 28px;
-                box-shadow: var(--bl-shadow);
-                color: #f7fbff;
-                margin-bottom: 1.4rem;
-                padding: 1.75rem 2rem 1.9rem;
+                background: linear-gradient(135deg, #0a1c30 0%, #0e3554 55%, #113f65 100%);
+                border: 1px solid rgba(255, 255, 255, 0.09);
+                border-radius: 22px;
+                box-shadow: 0 20px 56px rgba(10, 28, 48, 0.26);
+                color: #eef5fc;
+                margin: 0 0.5rem 1.4rem;
+                padding: 2.6rem 2.4rem 2.9rem;
                 position: relative;
                 overflow: hidden;
             }
 
             .bl-hero::after {
-                content: "";
-                position: absolute;
-                inset: auto -6% -32% auto;
-                width: 240px;
-                height: 240px;
-                background: radial-gradient(circle, rgba(246, 211, 144, 0.38), rgba(246, 211, 144, 0));
-                pointer-events: none;
+                display: none;
             }
 
             .bl-eyebrow {
@@ -106,16 +189,18 @@ def apply_page_style() -> None:
             }
 
             .bl-hero h1 {
-                color: #ffffff;
+                color: #f0f8ff;
                 font-size: 2.4rem;
-                margin: 0 0 0.45rem 0;
+                margin: 0 0 0.5rem 0;
+                letter-spacing: -0.025em;
             }
 
             .bl-hero p {
-                color: rgba(247, 251, 255, 0.84);
-                line-height: 1.6;
+                color: rgba(224, 240, 255, 0.82);
+                line-height: 1.65;
                 margin: 0;
-                max-width: 760px;
+                max-width: 740px;
+                font-size: 1.01rem;
             }
 
             .bl-panel, .bl-case-card, .bl-metric-card, .bl-result-card, .bl-error-card {
@@ -130,8 +215,15 @@ def apply_page_style() -> None:
             }
 
             .bl-case-card {
+                cursor: pointer;
                 margin-bottom: 1rem;
                 padding: 1.05rem 1.15rem;
+                transition: box-shadow 0.15s, transform 0.15s;
+            }
+
+            .bl-case-card:hover {
+                box-shadow: 0 22px 55px rgba(23, 38, 56, 0.12);
+                transform: translateY(-1px);
             }
 
             .bl-case-row {
@@ -165,6 +257,13 @@ def apply_page_style() -> None:
                 padding: 0.8rem 0.9rem;
                 max-height: 250px;
                 overflow-y: auto;
+            }
+
+            @media (prefers-color-scheme: dark) {
+                .bl-sequence-preview {
+                    background: rgba(255, 255, 255, 0.05);
+                    color: #b0c0cc;
+                }
             }
 
             .bl-badge-row {
@@ -382,26 +481,64 @@ def apply_page_style() -> None:
                 gap: 1rem;
                 align-items: flex-start;
             }
-            
+
             .bl-error-icon {
                 font-size: 1.5rem;
             }
-            
+
             .bl-error-content h4 {
                 margin: 0 0 0.4rem 0;
                 color: #c0392b;
                 font-size: 1.1rem;
             }
-            
+
             .bl-error-content p {
                 margin: 0;
                 font-size: 0.95rem;
                 color: var(--bl-ink);
             }
+
+            /* Hide Streamlit auto-generated sidebar nav — replaced by custom nav */
+            [data-testid="stSidebarNav"] { display: none !important; }
+
+            /* Compact/Full mode floating chip */
+            .bl-mode-chip {
+                position: fixed;
+                top: 0.55rem;
+                right: 1.2rem;
+                z-index: 1000;
+                background: rgba(255, 252, 247, 0.96);
+                border: 1px solid rgba(42, 71, 96, 0.22);
+                border-radius: 999px;
+                padding: 0.28rem 0.85rem;
+                font-size: 0.76rem;
+                font-weight: 700;
+                letter-spacing: 0.04em;
+                box-shadow: 0 2px 10px rgba(23, 38, 56, 0.14);
+                cursor: pointer;
+                text-decoration: none !important;
+                color: var(--bl-accent) !important;
+                transition: box-shadow 0.15s;
+            }
+
+            .bl-mode-chip:hover {
+                box-shadow: 0 4px 18px rgba(23, 38, 56, 0.2);
+                text-decoration: none !important;
+            }
+
+            @media (prefers-color-scheme: dark) {
+                .bl-mode-chip {
+                    background: rgba(23, 33, 43, 0.96);
+                    border-color: rgba(255, 255, 255, 0.15);
+                    color: #5ab4e0 !important;
+                }
+            }
 </style>
         """,
         unsafe_allow_html=True
     )
+    _inject_theme_css()
+    render_mode_chip()
 
 
 def _badge(text: str, background: str, foreground: str) -> str:
@@ -434,7 +571,7 @@ def signal_type_badge(signal_type: str | None) -> str:
     return _badge(signal_type or "UNKNOWN", "#eef2f4", "#475865")
 
 
-def render_hero(title: str, subtitle: str, mode_label: str) -> None:
+def render_hero(title: str, subtitle: str, mode_label: str, compact: bool = False) -> None:
     # Map legacy or internal mode names to human-readable display labels
     _mode_display = {
         "online": "Online",
@@ -443,7 +580,36 @@ def render_hero(title: str, subtitle: str, mode_label: str) -> None:
         "demo": "Offline",       # legacy
     }
     display_label = _mode_display.get(mode_label.lower(), mode_label.upper())
-    html_str = f"""
+    mode_icon = "🟢" if display_label == "Online" else "🔵"
+
+    if compact:
+        html_str = f"""
+<div style="
+    background: linear-gradient(135deg, #0a1c30 0%, #0e3554 55%, #113f65 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 0.9rem 1.5rem;
+    margin: 0 0.5rem 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    box-shadow: 0 8px 28px rgba(10, 28, 48, 0.2);
+">
+    <div style="flex: 1; min-width: 0;">
+        <div style="color: rgba(224,240,255,0.6); font-size: 0.72rem; letter-spacing: 0.14em;
+                    text-transform: uppercase; margin-bottom: 0.22rem;">
+            BioLens · {html.escape(display_label)} mode
+        </div>
+        <div style="color: #f0f8ff; font-size: 1.32rem; font-weight: 700;
+                    font-family: 'Iowan Old Style', 'Palatino Linotype', serif; letter-spacing: -0.02em;">
+            {html.escape(title)}
+        </div>
+    </div>
+    <div style="font-size: 1.5rem; flex-shrink: 0; opacity: 0.75;">{mode_icon}</div>
+</div>
+"""
+    else:
+        html_str = f"""
 <section class="bl-hero">
 <div class="bl-eyebrow">BioLens • {html.escape(display_label)} mode</div>
 <h1>{html.escape(title)}</h1>
@@ -506,18 +672,21 @@ def render_threat_radar(breakdown: dict[str, Any] | None, height: int = 320) -> 
         line=dict(color='#e74c3c' if sum(values) > 2.5 else '#0f5a85'),
         fillcolor='rgba(231, 76, 60, 0.2)' if sum(values) > 2.5 else 'rgba(15, 90, 133, 0.2)',
     ))
+    _fc = chart_font_color()
     fig.update_layout(
         polar=dict(
-            radialaxis=dict(visible=True, range=[0, 1]),
-            bgcolor='rgba(0,0,0,0)'
+            radialaxis=dict(visible=True, range=[0, 1], tickfont=dict(color=_fc)),
+            angularaxis=dict(tickfont=dict(color=_fc)),
+            bgcolor='rgba(0,0,0,0)',
         ),
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color=_fc),
         showlegend=False,
         margin=dict(l=20, r=20, t=20, b=20),
         height=height,
     )
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, width="stretch")
 
 
 def render_attributed_sequence(sequence: str, attribution_data: dict[str, Any] | None) -> None:
@@ -860,10 +1029,10 @@ def render_unified_feed_item(item: dict[str, Any]) -> str:
         seq_type = item.get("meta", {}).get("sequence_type", "")
         return f"""
 <div style="display:flex; gap:0.8rem; align-items:flex-start; padding:0.6rem 0;
-            border-bottom:1px solid var(--bl-border);">
+            border-bottom:1px solid var(--bl-border); overflow:hidden;">
     <div style="width:10px; height:10px; border-radius:50%; background:{color};
                 margin-top:0.35rem; flex-shrink:0;"></div>
-    <div style="flex:1; min-width:0;">
+    <div style="flex:1; min-width:0; overflow:hidden;">
         <div style="font-size:0.9rem; font-weight:500; white-space:nowrap; overflow:hidden;
                     text-overflow:ellipsis;">{title}</div>
         <div style="font-size:0.78rem; color:var(--bl-muted);">
@@ -881,9 +1050,9 @@ def render_unified_feed_item(item: dict[str, Any]) -> str:
         signal = item.get("meta", {}).get("signal_type", "")
         return f"""
 <div style="display:flex; gap:0.8rem; align-items:flex-start; padding:0.6rem 0;
-            border-bottom:1px solid var(--bl-border);">
+            border-bottom:1px solid var(--bl-border); overflow:hidden;">
     <div style="font-size:1rem; flex-shrink:0; margin-top:0.1rem;">📡</div>
-    <div style="flex:1; min-width:0;">
+    <div style="flex:1; min-width:0; overflow:hidden;">
         <div style="font-size:0.9rem; font-weight:500; white-space:nowrap; overflow:hidden;
                     text-overflow:ellipsis;">{title}</div>
         <div style="font-size:0.78rem; color:var(--bl-muted);">
@@ -995,15 +1164,17 @@ def render_response_time_chart(rt_data: dict[str, Any]) -> None:
             textposition="outside",
         ))
 
+    _fc = chart_font_color()
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=_fc),
         showlegend=False,
         height=260,
         margin=dict(l=10, r=10, t=10, b=30),
         yaxis_title="Mean Hours",
-        yaxis=dict(gridcolor="rgba(0,0,0,0.05)"),
-        xaxis=dict(showgrid=False),
+        yaxis=dict(gridcolor="rgba(0,0,0,0.05)", tickfont=dict(color=_fc)),
+        xaxis=dict(showgrid=False, tickfont=dict(color=_fc)),
         bargap=0.4,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")

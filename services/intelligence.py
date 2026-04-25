@@ -374,7 +374,7 @@ def match_case_to_watchlist(case_metadata: dict[str, Any]) -> list[dict[str, Any
         cat = item["category"].lower()
         expanded = _expand_keywords(kw)
 
-        hit = any(term in text_to_search for term in expanded) or cat in text_to_search
+        hit = any(term in text_to_search for term in expanded)
         if not hit:
             continue
 
@@ -475,3 +475,20 @@ def get_case_intelligence(case_id: str) -> list[dict[str, Any]]:
             (case_id,)
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def get_cases_with_intelligence_links(case_ids: list[str]) -> set[str]:
+    """
+    Return a set of case IDs (from the provided list) that have at least one
+    intelligence link. Uses a single IN() query instead of per-case lookups,
+    eliminating the O(N) DB call pattern in the Inbox page.
+    """
+    if not case_ids:
+        return set()
+    placeholders = ", ".join("?" for _ in case_ids)
+    with get_connection() as connection:
+        rows = connection.execute(
+            f"SELECT DISTINCT case_id FROM case_intelligence_links WHERE case_id IN ({placeholders})",
+            case_ids,
+        ).fetchall()
+    return {row["case_id"] for row in rows}

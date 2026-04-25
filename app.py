@@ -36,7 +36,9 @@ apply_page_style()
 
 mode = get_runtime_mode()
 snapshot = analytics_snapshot()
-ensure_demo_alerts()
+if not st.session_state.get("_demo_alerts_seeded"):
+    ensure_demo_alerts()
+    st.session_state["_demo_alerts_seeded"] = True
 active_alerts = len([a for a in list_alerts() if a["status"] not in ("DISMISSED", "REVIEWED")])
 recent_cases = list_screenings(limit=5)
 

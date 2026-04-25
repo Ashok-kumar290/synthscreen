@@ -28,6 +28,7 @@ render_hero(
     "Automation Rules",
     "Define rules that automatically escalate or flag cases when intelligence watchlist matches meet defined priority and severity thresholds.",
     mode,
+    compact=True,
 )
 
 # Seed default rules on first visit
@@ -90,6 +91,12 @@ with tab1:
                         if st.button("Delete", key=f"del_{rule.id}", use_container_width=True, type="secondary"):
                             delete_rule(rule.id)
                             st.rerun()
+                    else:
+                        st.markdown(
+                            '<div style="text-align:center; color:var(--bl-muted); font-size:0.8rem; '
+                            'padding-top:0.4rem;">🔒 Supervisor<br>only</div>',
+                            unsafe_allow_html=True,
+                        )
 
 
 # ── Tab 2: Create Rule ─────────────────────────────────────────────────────────
@@ -119,10 +126,11 @@ with tab2:
                     list(AUTOMATION_ACTIONS),
                     help="What BioLens should do when the rule fires.",
                 )
+                _status_opts = [s for s in ANALYST_STATUSES if s not in ("CLEARED", "CLOSED")]
                 r_target_status = st.selectbox(
                     "Set Analyst Status To",
-                    [s for s in ANALYST_STATUSES if s not in ("CLEARED", "CLOSED")],
-                    index=2,  # default ESCALATED
+                    _status_opts,
+                    index=_status_opts.index("ESCALATED") if "ESCALATED" in _status_opts else 0,
                     help="The analyst_status to assign to the matched case.",
                 )
 

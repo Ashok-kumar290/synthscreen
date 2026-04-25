@@ -23,6 +23,7 @@ render_hero(
     "Compliance Reports",
     "Generate structured operational reports summarising screening activity, intelligence coverage, and case resolution for compliance and audit purposes.",
     mode,
+    compact=True,
 )
 
 current_role = st.session_state.get("user_role", "Analyst")
@@ -56,7 +57,21 @@ with param_col:
     generate = st.button("⚙️ Generate Report", type="primary")
 
 if not generate:
-    st.info("Select a report period and click **Generate Report**.")
+    # Pre-generate preview — show all-time summary so the page isn't blank
+    _snap = analytics_snapshot()
+    _intel = get_alert_statistics()
+    _posture = compute_threat_posture()
+    st.markdown("### All-Time Summary Preview")
+    st.caption("Configure a date range above and click **Generate Report** to see a filtered report.")
+    prev_cols = st.columns(4)
+    with prev_cols[0]:
+        render_metric_card("Total Cases", str(_snap["total"]), "All persisted screenings")
+    with prev_cols[1]:
+        render_metric_card("Flagged Rate", f"{_snap['flagged_rate']:.0%}", "REVIEW + HIGH cases")
+    with prev_cols[2]:
+        render_metric_card("Intel Alerts", str(_intel["total"]), f"{_intel['active_watchlist_count']} watchlisted")
+    with prev_cols[3]:
+        render_metric_card("Threat Posture", _posture["level"], f"Score {_posture['score']}/100")
     st.stop()
 
 # ── Data Collection ────────────────────────────────────────────────────────────
@@ -76,14 +91,16 @@ snapshot = analytics_snapshot()
 st.markdown(f"## {report_title}")
 st.caption(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')} · Period: {start_str} → {end_str} · Mode: {mode.upper()}")
 
+# Pre-compute aggregates so they are always defined (even when cases is empty)
+flagged = sum(1 for c in cases if c["risk_level"] in ("REVIEW", "HIGH"))
+cleared = sum(1 for c in cases if c["analyst_status"] in ("CLEARED", "CLOSED"))
+
 m1, m2, m3, m4 = st.columns(4)
 with m1:
     render_metric_card("Cases in Period", str(len(cases)), "All screened cases")
 with m2:
-    flagged = sum(1 for c in cases if c["risk_level"] in ("REVIEW", "HIGH"))
     render_metric_card("Flagged", str(flagged), f"{flagged/len(cases):.0%} of total" if cases else "0%")
 with m3:
-    cleared = sum(1 for c in cases if c["analyst_status"] in ("CLEARED", "CLOSED"))
     render_metric_card("Resolved", str(cleared), "CLEARED or CLOSED")
 with m4:
     render_metric_card("New Alerts", str(len(alerts_in_range)), "Intelligence alerts in period")
@@ -187,6 +204,7 @@ st.markdown("---")
 st.markdown("### Export")
 export_cols = st.columns(2)
 
+_flagged_pct = f"{flagged/len(cases):.0%}" if cases else "0%"
 report_md = f"""# {report_title}
 
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}
@@ -195,7 +213,7 @@ report_md = f"""# {report_title}
 
 ## 1. Screening Summary
 - Total cases: {len(cases)}
-- Flagged: {flagged} ({flagged/len(cases):.0%})
+- Flagged: {flagged} ({_flagged_pct})
 - Resolved: {cleared}
 
 ## 2. Intelligence Summary

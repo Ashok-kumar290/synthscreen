@@ -101,6 +101,12 @@ def _validate_sequence(sequence: str, seq_type: str) -> tuple[str | None, str | 
     if seq_type not in {"DNA", "PROTEIN"}:
         return None, "unsupported_sequence_type"
 
+    if len(normalized) > 50_000:
+        return None, (
+            "sequence_too_long: Sequences over 50 kb exceed this prototype's scope. "
+            "Please split into smaller chunks and screen each separately."
+        )
+
     allowed = DNA_ALPHABET if seq_type == "DNA" else PROTEIN_ALPHABET
     invalid = sorted({character for character in normalized if character not in allowed})
     if invalid:
@@ -348,7 +354,7 @@ def _screen_online(sequence: str, seq_type: str, model_name: str) -> dict[str, A
     endpoint = f"{get_base_url()}/biolens/screen"
 
     payload = json.dumps({"sequence": sequence, "seq_type": seq_type}).encode("utf-8")
-    timeout_seconds = float(os.getenv("SYNTHSCREEN_TIMEOUT_SECONDS", "30"))
+    timeout_seconds = float(os.getenv("SYNTHSCREEN_TIMEOUT_SECONDS", "15"))
     request_object = request.Request(
         endpoint,
         data=payload,
@@ -393,11 +399,19 @@ def screen_sequence(sequence: str, seq_type: str) -> dict[str, Any]:
     if validation_error:
         return _error_response(model_name, validation_error, data_source="biolens-validation")
 
+    short_seq = len(normalized) < 20
+
     if mode == "offline":
-        return _screen_offline(normalized or "", seq_type, model_name)
-
-    if mode == "online":
+        result = _screen_offline(normalized, seq_type, model_name)
+    elif mode == "online":
         # SynthGuard /biolens/screen handles both DNA and PROTEIN natively.
-        return _screen_online(normalized or "", seq_type, model_name)
+        result = _screen_online(normalized, seq_type, model_name)
+    else:
+        return _error_response(model_name, f"unsupported_runtime_mode:{mode}", data_source="biolens-config")
 
-    return _error_response(model_name, f"unsupported_runtime_mode:{mode}", data_source="biolens-config")
+    if short_seq and result.get("ok"):
+        result["explanation"] = (
+            "Short sequences carry higher false-positive uncertainty. "
+            + (result.get("explanation") or "")
+        )
+    return result

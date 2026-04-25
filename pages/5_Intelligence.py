@@ -6,6 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from services import bootstrap_application, get_runtime_mode
 from services.constants import (
     ALERT_SEVERITIES,
     ALERT_SIGNAL_TYPES,
@@ -25,18 +26,24 @@ from services.intelligence import (
     update_alert_status,
 )
 from services.sidebar import render_global_sidebar
-from services.ui import apply_page_style, render_alert_card
+from services.ui import apply_page_style, render_alert_card, render_hero, render_metric_card
 
 st.set_page_config(page_title="BioLens — Intelligence", layout="wide")
+bootstrap_application()
 apply_page_style()
 render_global_sidebar()
 
-ensure_demo_alerts()
+mode = get_runtime_mode()
 
-st.title("Early-Warning Intelligence")
-st.markdown(
-    "Monitor outbreak, surveillance, policy, and research signals. "
-    "Add signals to the watchlist to automatically flag relevant sequences at screening time."
+if not st.session_state.get("_demo_alerts_seeded"):
+    ensure_demo_alerts()
+    st.session_state["_demo_alerts_seeded"] = True
+
+render_hero(
+    "Early-Warning Intelligence",
+    "Monitor outbreak, surveillance, policy, and research signals. Add signals to the watchlist to automatically flag relevant sequences at screening time.",
+    mode,
+    compact=True,
 )
 
 alerts = list_alerts()
@@ -44,17 +51,21 @@ active_watchlist = list_watchlist(active_only=True)
 stats = get_alert_statistics()
 
 # ── Metrics ────────────────────────────────────────────────────────────────────
+active_count = len([a for a in alerts if a['status'] not in ('DISMISSED', 'REVIEWED')])
+high_count = len([a for a in alerts if a['severity'] == 'HIGH'])
+reviewed_count = len([a for a in alerts if a['status'] == 'REVIEWED'])
+
 m1, m2, m3, m4, m5 = st.columns(5)
 with m1:
-    st.markdown(f"**Active Alerts:** {len([a for a in alerts if a['status'] not in ('DISMISSED', 'REVIEWED')])}")
+    render_metric_card("Active Alerts", str(active_count), "Unreviewed signals")
 with m2:
-    st.markdown(f"**HIGH Severity:** {len([a for a in alerts if a['severity'] == 'HIGH'])}")
+    render_metric_card("HIGH Severity", str(high_count), "Urgent signals")
 with m3:
-    st.markdown(f"**Watchlisted:** {len(active_watchlist)}")
+    render_metric_card("Watchlisted", str(len(active_watchlist)), "Active watch items")
 with m4:
-    st.markdown(f"**Reviewed:** {len([a for a in alerts if a['status'] == 'REVIEWED'])}")
+    render_metric_card("Reviewed", str(reviewed_count), "Acknowledged alerts")
 with m5:
-    st.markdown(f"**Case Links:** {stats.get('total_case_links', 0)}")
+    render_metric_card("Case Links", str(stats.get('total_case_links', 0)), "Screening connections")
 
 st.markdown("---")
 
@@ -83,6 +94,28 @@ with tab1:
         signal_type=None if f_signal == "All" else f_signal,
         region=None if f_region == "All Regions" else f_region,
     )
+
+    # UI-12: Bulk action bar for current filtered view
+    new_in_view = [a for a in filtered_alerts if a["status"] == "NEW"]
+    if new_in_view:
+        bulk_cols = st.columns([1, 1, 3])
+        with bulk_cols[0]:
+            if st.button(f"✓ Mark All Reviewed ({len(new_in_view)})", use_container_width=True):
+                for _a in new_in_view:
+                    update_alert_status(_a["id"], "REVIEWED")
+                st.toast(f"Marked {len(new_in_view)} alerts as reviewed.", icon="✅")
+                st.rerun()
+        with bulk_cols[1]:
+            if st.button(f"✕ Dismiss All ({len(new_in_view)})", use_container_width=True):
+                if st.session_state.get("_confirm_dismiss_all"):
+                    for _a in new_in_view:
+                        update_alert_status(_a["id"], "DISMISSED")
+                    st.session_state["_confirm_dismiss_all"] = False
+                    st.toast(f"Dismissed {len(new_in_view)} alerts.", icon="🗑️")
+                    st.rerun()
+                else:
+                    st.session_state["_confirm_dismiss_all"] = True
+                    st.warning("Click again to confirm bulk dismiss.")
 
     if not filtered_alerts:
         st.info("No alerts match your filters.")
@@ -161,9 +194,25 @@ with tab2:
                 """,
                 unsafe_allow_html=True,
             )
-            if st.button("Remove from Watchlist", key=f"rm_watch_{item['id']}"):
-                remove_from_watchlist(item["id"])
-                st.rerun()
+            # UI-11: Two-click confirm to prevent accidental watchlist removal
+            _confirm_key = f"_confirm_rm_{item['id']}"
+            if st.session_state.get(_confirm_key):
+                confirm_cols = st.columns([1, 1])
+                with confirm_cols[0]:
+                    if st.button("⚠️ Confirm Remove", key=f"confirm_rm_{item['id']}",
+                                 use_container_width=True, type="secondary"):
+                        remove_from_watchlist(item["id"])
+                        st.session_state.pop(_confirm_key, None)
+                        st.toast("Watchlist item removed.", icon="🗑️")
+                        st.rerun()
+                with confirm_cols[1]:
+                    if st.button("Cancel", key=f"cancel_rm_{item['id']}", use_container_width=True):
+                        st.session_state.pop(_confirm_key, None)
+                        st.rerun()
+            else:
+                if st.button("Remove from Watchlist", key=f"rm_watch_{item['id']}"):
+                    st.session_state[_confirm_key] = True
+                    st.rerun()
 
 
 # ── Tab 3: Create / Import Alerts ─────────────────────────────────────────────
@@ -292,7 +341,7 @@ with tab4:
                 xaxis=dict(showgrid=False),
                 yaxis=dict(gridcolor="rgba(0,0,0,0.05)"),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         with tl_col2:
             st.markdown("#### Signal Type Breakdown")
@@ -311,7 +360,7 @@ with tab4:
                     height=300,
                     margin=dict(l=5, r=5, t=5, b=5),
                 )
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig2, width="stretch")
 
         st.markdown("#### Regional Distribution")
         by_region = pd.DataFrame(stats.get("by_region", []))
@@ -319,7 +368,7 @@ with tab4:
             st.dataframe(
                 by_region.rename(columns={"region": "Region", "count": "Alerts", "max_severity": "Max Severity"}),
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
             )
 
         st.markdown("#### Watchlist Effectiveness")
@@ -327,6 +376,6 @@ with tab4:
         if not eff_df.empty:
             display_cols = ["keyword", "category", "priority", "match_count", "approved", "held", "escalated"]
             available = [c for c in display_cols if c in eff_df.columns]
-            st.dataframe(eff_df[available], hide_index=True, use_container_width=True)
+            st.dataframe(eff_df[available], hide_index=True, width="stretch")
         else:
             st.info("No watchlist effectiveness data yet — add watchlist items and screen some sequences.")

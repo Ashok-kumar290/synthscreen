@@ -7,7 +7,7 @@ from typing import Any
 
 import streamlit as st
 
-from services import bootstrap_application, get_runtime_mode
+from services import bootstrap_application, get_runtime_mode, get_ui_mode
 from services.model_interface import screen_sequence, get_base_url
 from services.storage import save_screening_case, update_review
 from services.constants import RISK_COLORS
@@ -108,16 +108,16 @@ def render_result_card(item: dict[str, Any]) -> None:
         """
     st.markdown(card_html.replace("\n", " "), unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1.0, 1.0, 1.0], gap="large")
+    col1, col2 = st.columns([1.0, 1.2], gap="large")
     with col1:
         st.markdown("#### Threat Radar")
         render_threat_radar(result.get("threat_breakdown"), height=240)
     with col2:
         st.markdown("#### Structured Threat Assessment")
         render_threat_bars(result.get("threat_breakdown"))
-    with col3:
-        st.markdown("#### Primary Risk Drivers")
-        render_primary_risk_drivers(result.get("threat_breakdown"))
+
+    st.markdown("#### Primary Risk Drivers")
+    render_primary_risk_drivers(result.get("threat_breakdown"))
 
     if "intelligence_matches" in item:
         render_intelligence_context_box(item["intelligence_matches"])
@@ -141,15 +141,15 @@ render_hero(
     mode,
 )
 
-# Pre-screening threat context banner
-threat_regions = get_active_threat_regions()
-if threat_regions:
-    region_names = ", ".join(r["region"] for r in threat_regions[:3])
-    st.warning(
-        f"⚡ **Active HIGH-Severity Alerts** in: **{region_names}**. "
-        f"Watchlist matching is active — relevant sequences will be flagged automatically. "
-        f"[View Intelligence](Intelligence)"
-    )
+# Pre-screening threat context banner (full mode only — compact keeps the flow clean)
+if get_ui_mode() == "full":
+    threat_regions = get_active_threat_regions()
+    if threat_regions:
+        region_names = ", ".join(r["region"] for r in threat_regions[:3])
+        st.warning(
+            f"⚡ **Active HIGH-Severity Alerts** in: **{region_names}**. "
+            f"Watchlist matching is active — relevant sequences will be flagged automatically."
+        )
 
 if saved_case_ids:
     ids_text = ", ".join(case_id[:8] for case_id in saved_case_ids)

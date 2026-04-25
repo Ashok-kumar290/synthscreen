@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 
 import streamlit as st
@@ -38,6 +39,7 @@ render_hero(
     "Case Review",
     "Inspect an individual screening record, update analyst state, capture notes and final action, then export the reviewed case with its audit trail.",
     mode,
+    compact=True,
 )
 
 if not all_cases:
@@ -100,7 +102,7 @@ with detail_col:
         with col2:
             st.markdown("#### Structured Assessment")
             render_threat_bars(case["threat_breakdown"])
-            
+
         st.markdown("#### Primary Risk Drivers")
         render_primary_risk_drivers(case["threat_breakdown"])
         
