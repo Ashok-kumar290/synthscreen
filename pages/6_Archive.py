@@ -18,6 +18,7 @@ from services.ui import (
 st.set_page_config(page_title="BioLens Archive", layout="wide")
 bootstrap_application()
 apply_page_style()
+render_global_sidebar()
 
 mode = get_runtime_mode()
 current_role = st.session_state.get("user_role", "Analyst")
@@ -28,7 +29,6 @@ render_hero(
     mode,
 )
 
-render_global_sidebar()
 
 resolved_cases = list_screenings(statuses=["CLEARED", "CLOSED"])
 

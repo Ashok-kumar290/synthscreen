@@ -20,6 +20,8 @@ from services.ui import (
     render_threat_bars,
     render_error_card,
     render_attributed_sequence,
+    render_threat_radar,
+    render_primary_risk_drivers,
 )
 
 def parse_fasta_records(raw_text: str) -> list[dict[str, str]]:
@@ -86,17 +88,18 @@ def render_result_card(item: dict[str, Any]) -> None:
         """
     st.markdown(card_html.replace("\n", " "), unsafe_allow_html=True)
     
-    col1, col2 = st.columns([1.1, 0.9], gap="large")
+    col1, col2, col3 = st.columns([1.0, 1.0, 1.0], gap="large")
     with col1:
+        st.markdown("#### Threat Radar")
+        render_threat_radar(result.get("threat_breakdown"), height=240)
+    with col2:
         st.markdown("#### Structured Threat Assessment")
         render_threat_bars(result.get("threat_breakdown"))
-    with col2:
-        st.markdown("#### Baseline Comparison")
-        if result.get("baseline_result"):
-            st.info(result["baseline_result"])
-        else:
-            st.markdown("<p style='color: var(--bl-muted); font-size: 0.9rem;'>No baseline comparison available.</p>", unsafe_allow_html=True)
-            
+    with col3:
+        st.markdown("#### Primary Risk Drivers")
+        render_primary_risk_drivers(result.get("threat_breakdown"))
+        
+    st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
     st.markdown("#### Sequence Highlight")
     render_attributed_sequence(item["sequence"], result.get("attribution_data"))
 

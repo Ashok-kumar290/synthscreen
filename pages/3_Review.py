@@ -20,6 +20,8 @@ from services.ui import (
     render_threat_radar,
     render_attributed_sequence,
     render_verdict_strip,
+    render_primary_risk_drivers,
+    render_threat_bars,
 )
 
 
@@ -68,7 +70,7 @@ with header_cols[1]:
     reviewed_label = format_timestamp(case["reviewed_at"]) if case["reviewed_at"] else "Pending"
     render_metric_card("Reviewed", reviewed_label, case["analyst_status"])
 
-detail_col, review_col = st.columns([1.1, 0.9], gap="large")
+detail_col, review_col = st.columns([1.4, 0.6], gap="large")
 
 with detail_col:
     card_html = f"""
@@ -89,15 +91,21 @@ with detail_col:
         """
     st.markdown(card_html.replace("\n", " "), unsafe_allow_html=True)
     if case.get("threat_breakdown"):
-        st.markdown("#### Structured Threat Assessment")
-        render_threat_radar(case["threat_breakdown"])
+        col1, col2 = st.columns([1.0, 1.2], gap="large")
+        with col1:
+            st.markdown("#### Threat Radar")
+            render_threat_radar(case["threat_breakdown"], height=260)
+        with col2:
+            st.markdown("#### Structured Assessment")
+            render_threat_bars(case["threat_breakdown"])
+            
+        st.markdown("#### Primary Risk Drivers")
+        render_primary_risk_drivers(case["threat_breakdown"])
         
+    st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
     st.markdown("#### Sequence")
     st.caption(f"{len(case['sequence_text'])} characters • {case['sequence_type']}")
     render_attributed_sequence(case["sequence_text"], case.get("attribution_data"))
-
-    st.markdown("#### Baseline Comparison")
-    st.write(case["baseline_result"] or "No baseline comparison is stored for this case.")
 
     st.markdown("#### Export")
     export_cols = st.columns(2)

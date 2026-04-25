@@ -458,7 +458,7 @@ def format_timestamp(value: str | None) -> str:
     return parsed.astimezone().strftime("%d %b %Y, %H:%M")
 
 
-def render_threat_radar(breakdown: dict[str, Any] | None) -> None:
+def render_threat_radar(breakdown: dict[str, Any] | None, height: int = 320) -> None:
     if not breakdown:
         return
         
@@ -497,10 +497,10 @@ def render_threat_radar(breakdown: dict[str, Any] | None) -> None:
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         showlegend=False,
-        margin=dict(l=40, r=40, t=20, b=20),
-        height=320,
+        margin=dict(l=20, r=20, t=20, b=20),
+        height=height,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig)
 
 
 def render_attributed_sequence(sequence: str, attribution_data: dict[str, Any] | None) -> None:
@@ -653,3 +653,56 @@ def render_error_card(title: str, detail: str) -> None:
 </div>
 """
     st.markdown(html_str.replace("\n", " "), unsafe_allow_html=True)
+
+
+def render_primary_risk_drivers(breakdown: dict[str, Any] | None) -> None:
+    if not breakdown:
+        st.info("No structured threat breakdown available.")
+        return
+
+    sorted_dims = sorted(breakdown.items(), key=lambda x: x[1], reverse=True)
+    top_dims = sorted_dims[:2]
+    
+    dim_labels = {
+        "pathogenicity": "Pathogenicity",
+        "evasion_potential": "Evasion Potential",
+        "synthesis_feasibility": "Synthesis Feasibility",
+        "environmental_resilience": "Env. Resilience",
+        "host_range": "Host Range"
+    }
+    
+    dim_explanations = {
+        "pathogenicity": "Sequence contains motifs highly associated with toxin production or virulence.",
+        "evasion_potential": "Features indicate structural or regulatory mechanisms to bypass host immunity.",
+        "synthesis_feasibility": "High feasibility indicates the sequence can be easily ordered via standard commercial synthesis pipelines.",
+        "environmental_resilience": "Sequence demonstrates robust stability in external environments.",
+        "host_range": "Broad compatibility suggests the ability to infect or affect multiple host species."
+    }
+    
+    html_parts = ['<div style="display: flex; flex-direction: column; gap: 0.8rem;">']
+    
+    for dim_key, score in top_dims:
+        if score > 0.6:
+            icon = "🔴"
+            color = "#dc3545"
+        elif score > 0.3:
+            icon = "🟠"
+            color = "#e8960c"
+        else:
+            icon = "🟢"
+            color = "#198754"
+            
+        label = dim_labels.get(dim_key, dim_key)
+        explanation = dim_explanations.get(dim_key, "Elevated signal detected in this dimension.")
+        
+        html_parts.append(f"""<div style="background: rgba(255,255,255,0.4); border: 1px solid var(--bl-border); border-radius: 8px; padding: 0.8rem; font-size: 0.9rem; margin-bottom: 0.8rem;">
+<div style="font-weight: 600; color: {color}; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.4rem;">
+{icon} {label} ({score:.2f})
+</div>
+<div style="color: var(--bl-ink); line-height: 1.4;">
+{explanation}
+</div>
+</div>""")
+        
+    html_parts.append('</div>')
+    st.markdown("".join(html_parts), unsafe_allow_html=True)

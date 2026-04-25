@@ -45,14 +45,14 @@ with upper_left:
     if risk_df.empty:
         st.info("No screening data available.")
     else:
-        st.bar_chart(risk_df, x="risk_level", y="count", use_container_width=True)
+        st.bar_chart(risk_df, x="risk_level", y="count")
 
 with upper_right:
     st.markdown("### Status Distribution")
     if status_df.empty:
         st.info("No review state available yet.")
     else:
-        st.bar_chart(status_df, x="analyst_status", y="count", use_container_width=True)
+        st.bar_chart(status_df, x="analyst_status", y="count")
 
 lower_left, lower_right = st.columns(2, gap="large")
 with lower_left:
@@ -61,14 +61,14 @@ with lower_left:
         st.info("No activity has been recorded yet.")
     else:
         activity_df["day"] = pd.to_datetime(activity_df["day"])
-        st.line_chart(activity_df.set_index("day")["count"], use_container_width=True)
+        st.line_chart(activity_df.set_index("day")["count"])
 
 with lower_right:
     st.markdown("### Top Flagged Categories")
     if category_df.empty:
         st.info("No flagged categories are available yet.")
     else:
-        st.bar_chart(category_df, x="category", y="count", use_container_width=True)
+        st.bar_chart(category_df, x="category", y="count")
 
 st.markdown("### Recent Flagged Cases")
 if recent_flagged_df.empty:
