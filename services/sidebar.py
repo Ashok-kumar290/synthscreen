@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import os
+from urllib import error, request
 
 import streamlit as st
 
@@ -6,6 +9,34 @@ from services import get_runtime_mode
 from services.export import build_export_dataset, export_filename, export_screenings_csv, export_screenings_json
 from services.seed_data import ensure_demo_cases, load_sample_dataset
 from services.storage import reset_database
+from services.model_interface import get_base_url
+_HEALTH_ENDPOINT_SUFFIX = "/health"
+
+
+def _derive_health_url(biolens_endpoint: str) -> str:
+    """Derive the /health URL from the configured BioLens screen endpoint."""
+    # Strip known path suffixes to get the base URL
+    for suffix in ("/biolens/screen", "/screen", "/protein/screen"):
+        if biolens_endpoint.endswith(suffix):
+            return biolens_endpoint[: -len(suffix)] + _HEALTH_ENDPOINT_SUFFIX
+    return biolens_endpoint.rstrip("/") + _HEALTH_ENDPOINT_SUFFIX
+
+
+def _check_api_health(endpoint: str) -> tuple[bool, str]:
+    """Ping the API health endpoint. Returns (is_healthy, message)."""
+    health_url = _derive_health_url(endpoint)
+    try:
+        req = request.Request(health_url, method="GET")
+        with request.urlopen(req, timeout=5) as resp:
+            if resp.status == 200:
+                return True, "API reachable"
+            return False, f"API returned status {resp.status}"
+    except error.URLError as exc:
+        if "timed out" in str(exc.reason).lower():
+            return False, "API timed out (may be waking up)"
+        return False, f"Cannot reach API: {exc.reason}"
+    except Exception as exc:
+        return False, f"Health check failed: {exc}"
 
 
 def render_global_sidebar() -> None:
@@ -13,6 +44,7 @@ def render_global_sidebar() -> None:
     mode = get_runtime_mode()
 
     with st.sidebar:
+        # ── User Role ────────────────────────────────────────────────
         st.markdown("### User Role")
         role = st.radio(
             "Access Level",
@@ -23,32 +55,94 @@ def render_global_sidebar() -> None:
         )
         st.session_state["user_role"] = role
 
-        # Streamlit automatically adds page navigation below this if there is no explicit st.navigation.
-        # But to ensure Admin Settings are below navigation, we don't have control over native menu order 
-        # unless we use st.navigation. Streamlit native navigation places itself at the top of the sidebar.
-        # So our custom elements here will naturally fall below the native navigation links.
+        # ── Active Intel Alert Banner ────────────────────────────────
+        from services.intelligence import list_alerts
+        active_alerts = len([a for a in list_alerts() if a["status"] not in ("DISMISSED", "REVIEWED")])
+        if active_alerts > 0:
+            st.markdown(
+                f"""
+                <div style="background: rgba(231, 76, 60, 0.1); border-left: 3px solid #e74c3c;
+                            padding: 0.5rem; border-radius: 4px; margin-top: 1rem; font-size: 0.85rem;">
+                    <strong>{active_alerts} Active Intel Signal{'s' if active_alerts > 1 else ''}</strong>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
+        # ── System Admin ─────────────────────────────────────────────
         with st.expander("⚙️ System Admin"):
-            st.markdown("**API Settings**")
-            mode_options = ["integrated", "offline", "demo"]
-            current_mode_idx = mode_options.index(mode) if mode in mode_options else 0
-            new_mode = st.radio("System Mode", mode_options, index=current_mode_idx, horizontal=True)
+
+            # — Screening Mode —
+            st.markdown("**Screening Mode**")
+            mode_labels = {
+                "online": "🟢 Online — Live SynthGuard API",
+                "offline": "🔵 Offline — BioLens local heuristic",
+            }
+            mode_display = [mode_labels["online"], mode_labels["offline"]]
+            current_idx = 0 if mode == "online" else 1
+
+            selected_display = st.radio(
+                "mode_select",
+                mode_display,
+                index=current_idx,
+                label_visibility="collapsed",
+            )
+            new_mode = "online" if selected_display == mode_labels["online"] else "offline"
+
+            # Mode description
+            if new_mode == "online":
+                st.caption(
+                    "All sequences (DNA & protein) are screened by the live SynthGuard API. "
+                    "Requires internet connectivity."
+                )
+            else:
+                st.caption(
+                    "All sequences are screened by BioLens' built-in heuristic engine. "
+                    "Works fully offline — no internet required."
+                )
+
             if new_mode != mode:
                 os.environ["BIOLENS_MODE"] = new_mode
                 st.rerun()
 
-            endpoint = os.environ.get("SYNTHSCREEN_ENDPOINT", "https://seyomi-synthguard-api.hf.space/biolens/screen")
-            new_endpoint = st.text_input("Track 1 API Endpoint", value=endpoint)
-            if new_endpoint != endpoint:
-                os.environ["SYNTHSCREEN_ENDPOINT"] = new_endpoint
-                st.rerun()
+            # — API Configuration (only in Online mode) —
+            if new_mode == "online":
+                st.markdown("---")
+                st.markdown("**API Configuration**")
+                endpoint = get_base_url()
+                new_endpoint = st.text_input("Endpoint URL", value=endpoint, key="endpoint_input")
+                if new_endpoint != endpoint:
+                    os.environ["SYNTHSCREEN_ENDPOINT"] = new_endpoint
+                    st.rerun()
 
+                # Health check
+                if st.button("🔍 Check Connection", use_container_width=True, key="health_check_btn"):
+                    with st.spinner("Checking…"):
+                        healthy, msg = _check_api_health(new_endpoint)
+                    if healthy:
+                        st.success(f"✅ {msg}")
+                    else:
+                        st.error(f"❌ {msg}")
+
+            # — Data Management —
+            st.markdown("---")
             st.markdown("**Data Management**")
-            if st.button("📦 Import Sample Dataset", use_container_width=True):
-                result = load_sample_dataset()
-                st.success(f"Sample data loaded. Inserted {result['inserted']} case(s).")
 
-            if st.button("🗑️ Reset All Data", use_container_width=True, type="secondary"):
+            if st.button("📦 Load Sample Dataset", use_container_width=True, key="load_sample_btn"):
+                result = load_sample_dataset()
+                if result["inserted"] > 0:
+                    st.success(f"Loaded {result['inserted']} sample case(s).")
+                else:
+                    st.info("Sample cases already present — nothing new to load.")
+
+            if st.button("🌱 Load Demo Cases", use_container_width=True, key="load_demo_btn"):
+                result = ensure_demo_cases()
+                if result["inserted"] > 0:
+                    st.success(f"Loaded {result['inserted']} demo case(s).")
+                else:
+                    st.info("Demo cases already present.")
+
+            if st.button("🗑️ Reset All Data", use_container_width=True, type="secondary", key="reset_btn"):
                 if st.session_state.get("confirm_reset"):
                     reset_database()
                     st.session_state["confirm_reset"] = False
@@ -56,26 +150,25 @@ def render_global_sidebar() -> None:
                     st.rerun()
                 else:
                     st.session_state["confirm_reset"] = True
-                    st.warning("Click again to confirm.")
+                    st.warning("Click again to confirm reset.")
 
-            if not st.session_state.get("confirm_reset", False):
-                if st.button("Load Demo Cases", use_container_width=True):
-                    result = ensure_demo_cases()
-                    st.success("Demo data synced.")
-
+            # — Export Data —
+            st.markdown("---")
             st.markdown("**Export Data**")
             export_records = build_export_dataset()
             st.download_button(
-                "Download CSV",
+                "⬇️ Download CSV",
                 data=export_screenings_csv(export_records),
                 file_name=export_filename("biolens_cases", "csv"),
                 mime="text/csv",
                 use_container_width=True,
+                key="export_csv_btn",
             )
             st.download_button(
-                "Download JSON",
+                "⬇️ Download JSON",
                 data=export_screenings_json(export_records),
                 file_name=export_filename("biolens_cases", "json"),
                 mime="application/json",
                 use_container_width=True,
+                key="export_json_btn",
             )

@@ -8,7 +8,7 @@ from typing import Any
 import streamlit as st
 
 from services import bootstrap_application, get_runtime_mode
-from services.model_interface import screen_sequence
+from services.model_interface import screen_sequence, get_base_url
 from services.storage import save_screening_case
 from services.constants import RISK_COLORS
 from services.sidebar import render_global_sidebar
@@ -22,7 +22,9 @@ from services.ui import (
     render_attributed_sequence,
     render_threat_radar,
     render_primary_risk_drivers,
+    render_intelligence_context_box,
 )
+from services.intelligence import match_case_to_watchlist, link_case_to_alert
 
 def parse_fasta_records(raw_text: str) -> list[dict[str, str]]:
     records: list[dict[str, str]] = []
@@ -98,6 +100,9 @@ def render_result_card(item: dict[str, Any]) -> None:
     with col3:
         st.markdown("#### Primary Risk Drivers")
         render_primary_risk_drivers(result.get("threat_breakdown"))
+
+    if "intelligence_matches" in item:
+        render_intelligence_context_box(item["intelligence_matches"])
         
     st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
     st.markdown("#### Sequence Highlight")
@@ -144,12 +149,20 @@ with input_col:
             progress_bar = st.progress(0, text="Screening sequences...")
             for i, submission in enumerate(submissions):
                 result = screen_sequence(submission["sequence"], sequence_type)
+                
+                intel_matches = match_case_to_watchlist({
+                    "category": result.get("category", ""),
+                    "explanation": result.get("explanation", ""),
+                    "sequence_type": sequence_type,
+                })
+                
                 run_results.append(
                     {
                         "label": submission["label"],
                         "sequence": submission["sequence"],
                         "sequence_type": sequence_type,
                         "result": result,
+                        "intelligence_matches": intel_matches,
                     }
                 )
                 progress_bar.progress((i + 1) / len(submissions), text=f"Screened {i + 1} of {len(submissions)} sequences...")
@@ -164,17 +177,29 @@ with input_col:
             render_error_card("Input Validation Failed", str(exc))
 
 with guide_col:
-    st.subheader("Run Mode")
-    endpoint_display = os.environ.get("SYNTHSCREEN_ENDPOINT", "https://seyomi-synthguard-api.hf.space/biolens/screen")
-    card_html = f"""
+    st.subheader("Screening Mode")
+    endpoint_display = get_base_url()
+
+    if mode == "online":
+        mode_detail = f"""
 <div class="bl-panel">
-<p><strong>Integrated</strong> forwards DNA requests to a live Track 1 API (currently set to <code>{html.escape(endpoint_display)}</code>). Protein requests use the local heuristic engine.</p>
-<p><strong>Offline</strong> uses the standalone local triage engine for all sequences. No internet required.</p>
-<p>Current Mode: <strong style="color: var(--bl-accent);">{mode.upper()}</strong></p>
-<p style="font-size: 0.85rem; color: var(--bl-muted); margin-top: 0.5rem;">To change the API endpoint or switch modes, visit the ⚙️ System Admin settings on the main overview page.</p>
+<p><strong>🟢 Online Mode</strong><br>
+All sequences — DNA and protein — are screened by the <strong>live SynthGuard API</strong>.<br>
+<code style="font-size:0.8rem;">{html.escape(endpoint_display)}</code></p>
+<p style="margin-bottom:0;">Results carry the <strong>SynthGuard API</strong> data source tag and reflect real model predictions.</p>
 </div>
 """
-    st.markdown(card_html.replace("\n", " "), unsafe_allow_html=True)
+    else:
+        mode_detail = """
+<div class="bl-panel">
+<p><strong>🔵 Offline Mode</strong><br>
+All sequences — DNA and protein — are screened by <strong>BioLens' built-in heuristic engine</strong>.
+No internet connection required.</p>
+<p style="margin-bottom:0;">Results carry the <strong>BioLens Heuristic</strong> data source tag. Switch to Online in System Admin to use the live API.</p>
+</div>
+"""
+
+    st.markdown(mode_detail.replace("\n", " "), unsafe_allow_html=True)
     st.subheader("Safe Handling")
     st.info(
         "BioLens supports defensive screening workflows only. Invalid submissions are rejected and not written to the case database."
@@ -223,13 +248,17 @@ if results:
         if st.button("Save Valid Results to Inbox", type="primary", use_container_width=True):
             saved_ids = []
             for item in valid_results:
-                saved_ids.append(
-                    save_screening_case(
-                        sequence_text=item["sequence"],
-                        sequence_type=item["sequence_type"],
-                        result=item["result"],
-                    )
+                case_id = save_screening_case(
+                    sequence_text=item["sequence"],
+                    sequence_type=item["sequence_type"],
+                    result=item["result"],
                 )
+                saved_ids.append(case_id)
+                
+                if "intelligence_matches" in item:
+                    for match in item["intelligence_matches"]:
+                        link_case_to_alert(case_id, match["alert_id"], match["watchlist_id"], match["match_reason"])
+                        
             st.session_state["saved_case_ids"] = saved_ids
             st.session_state["last_save_time"] = datetime.now().astimezone().isoformat()
             st.session_state["screening_results"] = []

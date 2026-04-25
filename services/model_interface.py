@@ -125,22 +125,22 @@ def _pick_category(seq_type: str, risk_level: str, sequence: str) -> str:
 
 def _baseline_result(risk_level: str) -> str:
     if risk_level == "SAFE":
-        return "Baseline similarity mock: routine profile, no alert."
+        return "Heuristic baseline: routine profile, no alert."
     if risk_level == "REVIEW":
-        return "Baseline similarity mock: partial signal overlap, manual review recommended."
-    return "Baseline similarity mock: inconclusive; function-aware adapter retained a high-priority flag."
+        return "Heuristic baseline: partial signal overlap, manual review recommended."
+    return "Heuristic baseline: inconclusive; function-aware adapter retained a high-priority flag."
 
 
-def _mock_explanation(seq_type: str, risk_level: str) -> str:
+def _offline_explanation(seq_type: str, risk_level: str) -> str:
     display_type = "DNA" if seq_type == "DNA" else "protein"
     if risk_level == "SAFE":
-        return f"Mock {display_type} screening found a low-concern functional profile with no elevated review signals."
+        return f"BioLens heuristic {display_type} screening found a low-concern functional profile with no elevated review signals."
     if risk_level == "REVIEW":
-        return f"Mock {display_type} screening found ambiguous functional cues, so the case should be reviewed by an analyst."
-    return f"Mock {display_type} screening found multiple elevated functional cues relative to the baseline mock, so the case should be escalated."
+        return f"BioLens heuristic {display_type} screening found ambiguous functional cues — manual analyst review recommended."
+    return f"BioLens heuristic {display_type} screening found multiple elevated functional cues — this case should be escalated."
 
 
-def _screen_mock(sequence: str, seq_type: str, model_name: str, data_source: str = "biolens-offline") -> dict[str, Any]:
+def _screen_offline(sequence: str, seq_type: str, model_name: str, data_source: str = "biolens-offline") -> dict[str, Any]:
     length = len(sequence)
     hash_factor = _hash_unit(sequence, seq_type)
 
@@ -208,11 +208,11 @@ def _screen_mock(sequence: str, seq_type: str, model_name: str, data_source: str
         "risk_level": risk_level,
         "confidence": round(confidence, 3),
         "category": category,
-        "explanation": _mock_explanation(seq_type, risk_level),
+        "explanation": _offline_explanation(seq_type, risk_level),
         "baseline_result": _baseline_result(risk_level),
         "model_name": model_name,
         "error": None,
-        "data_source": data_source,
+        "data_source": "biolens-offline",
         "threat_breakdown": {
             "pathogenicity": round(pathogenicity, 3),
             "evasion_potential": round(evasion_potential, 3),
@@ -263,8 +263,89 @@ def _coerce_integrated_response(payload: dict[str, Any], fallback_model_name: st
 
 _DEFAULT_ENDPOINT = "https://seyomi-synthguard-api.hf.space/biolens/screen"
 
-def _screen_integrated(sequence: str, seq_type: str, model_name: str) -> dict[str, Any]:
+
+def get_base_url() -> str:
+    """Derive the base API URL from the configured endpoint."""
     endpoint = os.getenv("SYNTHSCREEN_ENDPOINT", _DEFAULT_ENDPOINT)
+    for suffix in ("/biolens/screen", "/screen", "/protein/screen"):
+        if endpoint.endswith(suffix):
+            return endpoint[: -len(suffix)]
+    return endpoint.rstrip("/")
+
+
+def get_api_health() -> dict[str, Any]:
+    """GET /health"""
+    url = f"{get_base_url()}/health"
+    try:
+        req = request.Request(url, method="GET")
+        with request.urlopen(req, timeout=5) as resp:
+            return {"ok": resp.status == 200, "status": resp.status}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def screen_dna_direct(sequence: str) -> dict[str, Any]:
+    """POST /screen"""
+    url = f"{get_base_url()}/screen"
+    payload = json.dumps({"sequence": sequence}).encode("utf-8")
+    req = request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def screen_protein_direct(sequence: str) -> dict[str, Any]:
+    """POST /protein/screen"""
+    url = f"{get_base_url()}/protein/screen"
+    payload = json.dumps({"sequence": sequence}).encode("utf-8")
+    req = request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def screen_batch(sequences: list[str]) -> dict[str, Any]:
+    """POST /screen/batch"""
+    url = f"{get_base_url()}/screen/batch"
+    payload = json.dumps({"sequences": sequences}).encode("utf-8")
+    req = request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def submit_split_order(sequences: list[str]) -> dict[str, Any]:
+    """POST /split/submit"""
+    url = f"{get_base_url()}/split/submit"
+    payload = json.dumps({"sequences": sequences}).encode("utf-8")
+    req = request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def get_model_info() -> dict[str, Any]:
+    """GET /model/info"""
+    url = f"{get_base_url()}/model/info"
+    try:
+        req = request.Request(url, method="GET")
+        with request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def _screen_online(sequence: str, seq_type: str, model_name: str) -> dict[str, Any]:
+    """Call the SynthGuard /biolens/screen endpoint for DNA or PROTEIN sequences."""
+    endpoint = f"{get_base_url()}/biolens/screen"
 
     payload = json.dumps({"sequence": sequence, "seq_type": seq_type}).encode("utf-8")
     timeout_seconds = float(os.getenv("SYNTHSCREEN_TIMEOUT_SECONDS", "30"))
@@ -280,46 +361,43 @@ def _screen_integrated(sequence: str, seq_type: str, model_name: str) -> dict[st
             body = response.read().decode("utf-8")
         return _coerce_integrated_response(json.loads(body), model_name)
     except error.HTTPError as exc:
-        return _error_response(model_name, f"integration_http_error:{exc.code}", data_source="synthguard-api")
+        return _error_response(model_name, f"api_http_error:{exc.code}", data_source="synthguard-api")
     except error.URLError as exc:
         if isinstance(exc.reason, TimeoutError) or "timed out" in str(exc.reason).lower():
-            return _error_response(model_name, "integration_timeout_error:The SynthGuard API space is waking up or overloaded.", data_source="synthguard-api")
-        return _error_response(model_name, f"integration_connection_error:{exc.reason}", data_source="synthguard-api")
+            return _error_response(
+                model_name,
+                "api_timeout:The SynthGuard API is waking up or overloaded. Switch to Offline mode to use the local heuristic engine.",
+                data_source="synthguard-api",
+            )
+        return _error_response(model_name, f"api_connection_error:{exc.reason}", data_source="synthguard-api")
     except (TimeoutError, ValueError, json.JSONDecodeError) as exc:
-        return _error_response(model_name, f"integration_parse_error:{exc}", data_source="synthguard-api")
+        return _error_response(model_name, f"api_parse_error:{exc}", data_source="synthguard-api")
 
 
 def screen_sequence(sequence: str, seq_type: str) -> dict[str, Any]:
     """
     Screen a DNA or protein sequence through the BioLens adapter contract.
-    """
 
+    Modes:
+      offline — BioLens built-in heuristic engine, no internet required.
+      online  — Live SynthGuard API (/biolens/screen) for both DNA and PROTEIN.
+    """
     mode = os.getenv("BIOLENS_MODE", "offline").strip().lower() or "offline"
+    # Accept legacy 'integrated'/'demo' values gracefully.
+    if mode in {"integrated", "demo"}:
+        mode = "online" if mode == "integrated" else "offline"
+
     model_name = f"biolens-{mode}-adapter"
     normalized, validation_error = _validate_sequence(sequence, seq_type)
 
     if validation_error:
         return _error_response(model_name, validation_error, data_source="biolens-validation")
 
-    if mode in {"offline", "demo"}:
-        return _screen_mock(normalized or "", seq_type, model_name, data_source=f"biolens-{mode}")
+    if mode == "offline":
+        return _screen_offline(normalized or "", seq_type, model_name)
 
-    if mode == "integrated":
-        # The SynthGuard API only supports DNA. Fall back to mock mode for PROTEIN sequences.
-        if seq_type == "PROTEIN":
-            return _screen_mock(normalized or "", seq_type, "biolens-heuristic", data_source="biolens-heuristic")
-        
-        # Try the integrated API for DNA
-        result = _screen_integrated(normalized or "", seq_type, model_name)
-        
-        # If the API returns a known error that we'd rather handle gracefully (like sequence_too_short),
-        # or if it fails completely (e.g., HF space is asleep/timeout), fallback to mock mode 
-        # so the dashboard demo doesn't completely break.
-        if not result.get("ok"):
-            # We return the actual error so the UI can handle it explicitly with the new error cards.
-            # No silent fallback here anymore.
-            return result
-            
-        return result
+    if mode == "online":
+        # SynthGuard /biolens/screen handles both DNA and PROTEIN natively.
+        return _screen_online(normalized or "", seq_type, model_name)
 
     return _error_response(model_name, f"unsupported_runtime_mode:{mode}", data_source="biolens-config")
