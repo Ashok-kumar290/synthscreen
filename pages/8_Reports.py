@@ -192,8 +192,8 @@ st.markdown("### 5. Compliance Notes")
 st.markdown(
     """
 - All screening decisions are persisted with full audit trails in the local SQLite database.
-- Role-based access control is enforced — HIGH risk cases require Supervisor approval.
-- Intelligence alerts are sourced from external feeds and operator-authored signals.
+- Role-aware review controls are implemented in the UI; production deployment requires real authentication and server-side authorization.
+- Intelligence alerts are demo/operator-curated signals in this prototype.
 - Export this report as Markdown or download raw case data from the Inbox page.
     """
 )
@@ -225,7 +225,7 @@ report_md = f"""# {report_title}
 - Mean: {rt_metrics.get('overall', {}).get('mean_hours', 'N/A')} hours
 
 ## 4. Compliance Notes
-All decisions persisted with audit trails. Role-based access enforced.
+All decisions persisted with audit trails. Role-aware review controls are implemented in the UI; production deployment requires real authentication and server-side authorization.
 """
 
 with export_cols[0]:

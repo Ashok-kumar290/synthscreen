@@ -65,6 +65,16 @@ audit_events = list_audit_events(selected_id)
 intel_links = get_case_intelligence(selected_id)
 export_record = build_export_dataset([selected_id])
 
+model_hazard_score = case.get("model_hazard_score")
+if model_hazard_score is None:
+    model_hazard_score = case["hazard_score"]
+model_risk_level = case.get("model_risk_level") or case["risk_level"]
+intel_modifier = float(case.get("intel_modifier") or 0.0)
+effective_hazard_score = case.get("effective_hazard_score")
+if effective_hazard_score is None:
+    effective_hazard_score = case["hazard_score"]
+effective_risk_level = case.get("effective_risk_level") or case["risk_level"]
+
 st.markdown(render_verdict_strip(case).replace("\n", " "), unsafe_allow_html=True)
 
 header_cols = st.columns(2, gap="large")
@@ -94,6 +104,28 @@ with detail_col:
 </div>
         """
     st.markdown(card_html.replace("\n", " "), unsafe_allow_html=True)
+
+    risk_adjustment_html = f"""
+<div class="bl-panel" style="margin-bottom: 1.25rem;">
+<div style="font-weight: 700; margin-bottom: 0.75rem;">Risk Adjustment</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem;">
+<div>
+<div class="bl-case-meta">Raw model score</div>
+<div style="font-weight: 700;">{float(model_hazard_score):.2f} / {html.escape(str(model_risk_level))}</div>
+</div>
+<div>
+<div class="bl-case-meta">Intel modifier</div>
+<div style="font-weight: 700;">+{intel_modifier:.2f}</div>
+</div>
+<div>
+<div class="bl-case-meta">BioLens operational score</div>
+<div style="font-weight: 700;">{float(effective_hazard_score):.2f} / {html.escape(str(effective_risk_level))}</div>
+</div>
+</div>
+</div>
+    """
+    st.markdown(risk_adjustment_html.replace("\n", " "), unsafe_allow_html=True)
+
     if case.get("threat_breakdown"):
         col1, col2 = st.columns([1.0, 1.2], gap="large")
         with col1:

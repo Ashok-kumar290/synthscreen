@@ -4,10 +4,10 @@ from typing import Any
 
 
 def risk_level_from_score(score: float) -> str:
-    """Return the BioLens risk tier for a normalized score."""
-    if score >= 0.72:
+    """Return the BioLens operational risk tier for a normalized score."""
+    if score >= 0.60:
         return "HIGH"
-    if score >= 0.42:
+    if score >= 0.30:
         return "REVIEW"
     return "SAFE"
 

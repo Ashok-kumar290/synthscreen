@@ -4,7 +4,9 @@
 
 BioLens is a practitioner-facing biosecurity dashboard built for the [AIxBio Hackathon 2026](https://apartresearch.com/sprints/aixbio-hackathon-2026-04-24-to-2026-04-26) (April 24–26, hosted by Apart Research). It addresses a gap identified in the hackathon's Track 3 brief: biosecurity analysts have no unified operational surface. Screening engines, threat intelligence, outbreak signals, and compliance workflows exist in silos — BioLens connects them into a single triage-to-report workflow that runs entirely offline or against a live AI screening API.
 
-The project covers three of the four hackathon tracks. Track 1 (the SynthGuard screening engine) is on a separate branch (`synthguard`) and is the work of a teammate. Tracks 2 and 3 are on this branch.
+Final submission tracks: **Track 1 and Track 3**.
+
+Track 1 (the SynthGuard screening engine) is on a separate branch (`synthguard`) and is the work of a teammate. BioLens on this branch is the Track 3 operator dashboard. It includes a Track-2-inspired intelligence layer, but it is not submitted as a full Track 2 pandemic early-warning system. The current intelligence module uses demo/operator-curated alerts, watchlists, and triage modifiers rather than live external surveillance ingestion.
 
 ---
 
@@ -13,18 +15,20 @@ The project covers three of the four hackathon tracks. Track 1 (the SynthGuard s
 | # | Track | Sponsor | What we built | Branch |
 |---|-------|---------|---------------|--------|
 | 1 | **DNA Screening & Synthesis Controls** | CBAI | ESM-2 + LoRA protein hazard scoring; k-mer DNA triage model | `synthguard` |
-| 2 | **Pandemic Early Warning** | Measuring AI Progress | Threat intelligence feed, outbreak signal aggregation, watchlist engine | `biolens` |
-| 3 | **AI Biosecurity Tools** | Fourth Eon Bio | BioLens: full analyst workflow — intake, triage, review, analytics, automation, compliance export | `biolens` |
+| 3 | **AI Biosecurity Tools** | Fourth Eon Bio | BioLens: full analyst workflow — intake, intelligence-aware triage, review, analytics, automation, compliance export | `biolens` |
+| Inspired by Track 2 | Pandemic Early Warning | Measuring AI Progress | Demo/operator-curated alert feed, watchlist engine, and intelligence modifiers supporting Track 3 triage | `biolens` |
 
-All three tracks integrate through a single stable interface in `services/model_interface.py` (see [Track 1 Integration Contract](#track-1-integration-contract)).
+The Track 1 and Track 3 components integrate through a single stable interface in `services/model_interface.py` (see [Track 1 Integration Contract](#track-1-integration-contract)).
 
 ---
 
-## Track 2: Pandemic Intelligence Layer
+## Track-2-Inspired Intelligence Layer
 
 ### What it does
 
-The intelligence layer gives analysts real-time situational awareness alongside sequence screening. It aggregates outbreak signals, surveillance anomalies, policy changes, and high-risk research flags into a unified alert feed. When a `HIGH`-severity alert is active, the dashboard surfaces it prominently and raises analyst review sensitivity for sequences in related pathogen families — closing the gap between surveillance signals and lab screening decisions.
+The intelligence layer gives analysts situational awareness alongside sequence screening. It presents demo/operator-curated outbreak signals, surveillance anomalies, policy changes, and high-risk research flags in a unified alert feed. When a watchlisted signal matches a screening result, BioLens persists an intelligence-adjusted operational triage score for analyst workflow, reporting, and audit.
+
+This is intentionally framed as Track-2-inspired support for the Track 3 dashboard, not as a full live pandemic early-warning system.
 
 ### Signal types
 
@@ -39,7 +43,7 @@ The intelligence layer gives analysts real-time situational awareness alongside 
 ### Data sources
 
 - `data/demo_intelligence.json` — pre-seeded demo alerts for offline and judging use
-- `data/intel_feed.json` — live intelligence feed slot (populated in production)
+- `data/intel_feed.json` — reserved future feed slot for production external intelligence integration
 - `services/intelligence.py` — aggregation, deduplication, severity scoring, watchlist management
 
 ### Alert schema
@@ -66,7 +70,7 @@ The intelligence layer gives analysts real-time situational awareness alongside 
 
 ### Cross-track integration
 
-- Active `HIGH`-severity alerts raise review sensitivity for sequences matching related pathogen families
+- Active watchlist matches raise operational triage sensitivity for matching screening results
 - Case-alert linkages are tracked in the `case_intelligence_links` SQLite table
 - Alert stats (active count, high-severity count, watchlist hits) feed the Analytics and Home dashboards
 
@@ -158,6 +162,9 @@ screenings
   id, submitted_at, reviewed_at
   sequence_text, sequence_type
   hazard_score, risk_level, confidence
+  model_hazard_score, model_risk_level
+  intel_modifier
+  effective_hazard_score, effective_risk_level
   category, explanation, baseline_result
   model_name, data_source
   analyst_status, analyst_notes, final_action
@@ -193,6 +200,8 @@ automation_log
   rule_name, case_id, action_taken
   match_reason, fired_at
 ```
+
+`hazard_score` and `risk_level` are the operational triage fields used by Inbox, Analytics, Reports, and Archive. For intelligence-matched cases, they mirror the adjusted `effective_*` values. The raw SynthGuard/BioLens model output is preserved in `model_hazard_score` and `model_risk_level`, with `intel_modifier` recording the watchlist-driven adjustment.
 
 ### Limitations
 
@@ -331,7 +340,7 @@ funcscreen/
 │   ├── 2_Inbox.py                # Case queue management
 │   ├── 3_Review.py               # Deep-dive analyst workflow
 │   ├── 4_Analytics.py            # Operational metrics
-│   ├── 5_Intelligence.py         # Biosecurity alerts and watchlist (Track 2)
+│   ├── 5_Intelligence.py         # Track-2-inspired alerts and watchlist
 │   ├── 6_Archive.py              # Closed cases
 │   ├── 7_Automation.py           # Auto-escalation rule management
 │   └── 8_Reports.py              # Compliance export
@@ -340,7 +349,7 @@ funcscreen/
 │   ├── constants.py              # Enums, style maps, page lists
 │   ├── storage.py                # SQLite CRUD, analytics queries
 │   ├── model_interface.py        # Track 1 integration contract
-│   ├── intelligence.py           # Track 2 alert aggregation
+│   ├── intelligence.py           # Curated alert aggregation and watchlist matching
 │   ├── automation.py             # Automation rule engine
 │   ├── dashboard.py              # Threat posture, activity feed
 │   ├── export.py                 # CSV/JSON export utilities
@@ -350,8 +359,8 @@ funcscreen/
 ├── data/
 │   ├── biolens.db                # SQLite database (runtime, gitignored)
 │   ├── demo_cases.json           # Pre-seeded demo screenings
-│   ├── demo_intelligence.json    # Pre-seeded demo alerts (Track 2)
-│   ├── intel_feed.json           # Live intelligence feed slot
+│   ├── demo_intelligence.json    # Pre-seeded demo intelligence alerts
+│   ├── intel_feed.json           # Reserved future external intelligence feed slot
 │   └── sample_dataset.json       # Example sequences for testing
 ├── scripts/
 │   └── generate_docs.py          # Generates docs/interactive_docs.html from all .md files (output gitignored)
