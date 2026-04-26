@@ -18,6 +18,11 @@ SCREENING_COLUMNS = (
     "sequence_type",
     "hazard_score",
     "risk_level",
+    "model_hazard_score",
+    "model_risk_level",
+    "intel_modifier",
+    "effective_hazard_score",
+    "effective_risk_level",
     "confidence",
     "category",
     "explanation",
@@ -62,6 +67,11 @@ def init_db() -> None:
             sequence_type TEXT NOT NULL,
             hazard_score REAL NOT NULL,
             risk_level TEXT NOT NULL,
+            model_hazard_score REAL,
+            model_risk_level TEXT,
+            intel_modifier REAL NOT NULL DEFAULT 0.0,
+            effective_hazard_score REAL,
+            effective_risk_level TEXT,
             confidence REAL NOT NULL,
             category TEXT NOT NULL,
             explanation TEXT NOT NULL,
@@ -140,12 +150,26 @@ def init_db() -> None:
         for statement in statements:
             connection.execute(statement)
         
-        # Add data_source column if it doesn't exist (SQLite doesn't support IF NOT EXISTS for ADD COLUMN)
-        try:
-            connection.execute("ALTER TABLE screenings ADD COLUMN data_source TEXT")
-        except sqlite3.OperationalError:
-            pass # Column already exists
-            
+        # SQLite does not support IF NOT EXISTS for ADD COLUMN.
+        migration_columns = (
+            ("data_source", "TEXT"),
+            ("model_hazard_score", "REAL"),
+            ("model_risk_level", "TEXT"),
+            ("intel_modifier", "REAL NOT NULL DEFAULT 0.0"),
+            ("effective_hazard_score", "REAL"),
+            ("effective_risk_level", "TEXT"),
+        )
+        for column_name, column_type in migration_columns:
+            try:
+                connection.execute(f"ALTER TABLE screenings ADD COLUMN {column_name} {column_type}")
+            except sqlite3.OperationalError:
+                pass
+        connection.execute("UPDATE screenings SET model_hazard_score = hazard_score WHERE model_hazard_score IS NULL")
+        connection.execute("UPDATE screenings SET model_risk_level = risk_level WHERE model_risk_level IS NULL")
+        connection.execute("UPDATE screenings SET intel_modifier = 0.0 WHERE intel_modifier IS NULL")
+        connection.execute("UPDATE screenings SET effective_hazard_score = hazard_score WHERE effective_hazard_score IS NULL")
+        connection.execute("UPDATE screenings SET effective_risk_level = risk_level WHERE effective_risk_level IS NULL")
+
         connection.commit()
 
     # Initialise automation tables (defined in services/automation.py to avoid circular imports)
@@ -168,6 +192,12 @@ def _normalize_screening_record(record: dict[str, Any]) -> dict[str, Any]:
     risk_level = str(record["risk_level"])
     if risk_level not in RISK_LEVELS:
         raise ValueError(f"Invalid risk level: {risk_level}")
+    model_risk_level = str(record.get("model_risk_level") or risk_level)
+    if model_risk_level not in RISK_LEVELS:
+        raise ValueError(f"Invalid model risk level: {model_risk_level}")
+    effective_risk_level = str(record.get("effective_risk_level") or risk_level)
+    if effective_risk_level not in RISK_LEVELS:
+        raise ValueError(f"Invalid effective risk level: {effective_risk_level}")
 
     sequence_type = str(record["sequence_type"])
     if sequence_type not in {"DNA", "PROTEIN"}:
@@ -181,6 +211,13 @@ def _normalize_screening_record(record: dict[str, Any]) -> dict[str, Any]:
     if final_action is not None and final_action not in FINAL_ACTIONS:
         raise ValueError(f"Invalid final action: {final_action}")
 
+    model_hazard_score = record.get("model_hazard_score")
+    if model_hazard_score is None:
+        model_hazard_score = record["hazard_score"]
+    effective_hazard_score = record.get("effective_hazard_score")
+    if effective_hazard_score is None:
+        effective_hazard_score = record["hazard_score"]
+
     return {
         "id": str(record.get("id") or uuid.uuid4()),
         "submitted_at": str(record.get("submitted_at") or utc_now_iso()),
@@ -188,6 +225,11 @@ def _normalize_screening_record(record: dict[str, Any]) -> dict[str, Any]:
         "sequence_type": sequence_type,
         "hazard_score": float(record["hazard_score"]),
         "risk_level": risk_level,
+        "model_hazard_score": float(model_hazard_score),
+        "model_risk_level": model_risk_level,
+        "intel_modifier": float(record.get("intel_modifier") or 0.0),
+        "effective_hazard_score": float(effective_hazard_score),
+        "effective_risk_level": effective_risk_level,
         "confidence": float(record["confidence"]),
         "category": str(record["category"]),
         "explanation": str(record["explanation"]),
@@ -246,6 +288,11 @@ def save_screening_case(sequence_text: str, sequence_type: str, result: dict[str
             "sequence_type": sequence_type,
             "hazard_score": result["hazard_score"],
             "risk_level": result["risk_level"],
+            "model_hazard_score": result.get("model_hazard_score", result["hazard_score"]),
+            "model_risk_level": result.get("model_risk_level", result["risk_level"]),
+            "intel_modifier": result.get("intel_modifier", 0.0),
+            "effective_hazard_score": result.get("effective_hazard_score", result["hazard_score"]),
+            "effective_risk_level": result.get("effective_risk_level", result["risk_level"]),
             "confidence": result["confidence"],
             "category": result["category"],
             "explanation": result["explanation"],
@@ -265,6 +312,11 @@ def save_screening_case(sequence_text: str, sequence_type: str, result: dict[str
                 "details": {
                     "risk_level": result["risk_level"],
                     "hazard_score": result["hazard_score"],
+                    "model_risk_level": result.get("model_risk_level", result["risk_level"]),
+                    "model_hazard_score": result.get("model_hazard_score", result["hazard_score"]),
+                    "intel_modifier": result.get("intel_modifier", 0.0),
+                    "effective_risk_level": result.get("effective_risk_level", result["risk_level"]),
+                    "effective_hazard_score": result.get("effective_hazard_score", result["hazard_score"]),
                     "model_name": result["model_name"],
                 },
             }
@@ -581,4 +633,3 @@ def get_alerts_in_range(start_date: str, end_date: str) -> list[dict[str, Any]]:
             (start_date, end_date),
         ).fetchall()
     return [dict(row) for row in rows]
-
