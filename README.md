@@ -1,12 +1,11 @@
-# SynthGuard × BioLens: A Function-Aware Biosecurity Pipeline
+# SynthGuard: Function-Aware Biosecurity Screening
 
-**AIxBio Hackathon 2026 — Track 1 (DNA Screening) + Track 3 (Operator Dashboard)**
-**Team:** Ashok Kumar, Akhil
+**AIxBio Hackathon 2026 — Track 1: DNA Screening & Synthesis Controls**
+**Author:** Ashok Kumar
 
 | Resource | Link |
 |---|---|
 | Live API | https://seyomi-synthguard-api.hf.space |
-| Operator Dashboard | https://seyomi-biolens-dashboard.hf.space |
 | Interactive Demo | https://seyomi-synthguard-demo.hf.space |
 | Models (HF Hub) | https://huggingface.co/Seyomi/synthguard-kmer |
 | Dataset (HF Hub) | https://huggingface.co/datasets/Seyomi/synthscreen-dataset |
@@ -16,8 +15,7 @@
 
 ## The Problem
 
-DNA synthesis screeners rely on BLAST percent-identity against curated hazard databases.
-We measured two critical failure modes:
+DNA synthesis screeners rely on BLAST percent-identity against curated hazard databases. We measured two critical failure modes:
 
 - **99.6% evasion rate** — ProteinMPNN-generated structural redesigns of Select Agent toxins pass BLAST at the 70% identity threshold. The model redesigns the sequence while preserving the dangerous fold.
 - **0.4% detection** of codon-optimized AI-designed variants. Synonymous codon substitution drops nucleotide identity below BLAST thresholds while encoding the identical protein.
@@ -85,9 +83,8 @@ SynthGuard replaces sequence-identity search with function-aware features — co
 
 ## What's Built
 
-### Track 1 — SynthGuard Screener
+### DNA Model (1,364 features, LightGBM)
 
-**DNA model (1,364 features, LightGBM):**
 - k-mer frequencies k=3–6, normalized by length (1,358-dim subset after variance thresholding)
 - 6 global statistics: length, GC/AT content, N-fraction, max char frequency, Shannon entropy
 - RSCU (Relative Synonymous Codon Usage) for all 64 codons
@@ -96,28 +93,17 @@ SynthGuard replaces sequence-identity search with function-aware features — co
 
 Two models: **general triage** (≥150 bp, 5.4 MB, 2 ms/seq) and **short-seq specialist** (<150 bp, 1.1 MB, 1 ms/seq).
 
-**Protein model v4 (906 features, LightGBM):**
+### Protein Model v4 (906 features, LightGBM)
+
 - 426 compositional features: 20-dim AA composition + 400-dim dipeptide frequencies + 6 physicochemical descriptors
 - 480-dim ESM-2 mean-pooled embeddings from `facebook/esm2_t12_35M_UR50D`
-- Trained on 50 ProteinMPNN variants each of Abrin, Ricin, Anthrax LF, Diphtheria (1BC7 seed 999). BoNT excluded from all training.
+- Trained on 50 ProteinMPNN variants each of Abrin, Ricin, Anthrax LF, and Diphtheria (1BC7, seed 999). BoNT excluded from all training versions.
 
-**Decision tiers:**
+### Decision Tiers
+
 - `ALLOW` — risk score < 0.30
 - `REVIEW` — 0.30 ≤ score < 0.60 → human review queue
 - `ESCALATE` — score ≥ 0.60 → hold order
-
-### Track 3 — BioLens Operator Dashboard
-
-8-page Streamlit application connected to SynthGuard via `POST /biolens/screen`:
-
-1. **Home** — Threat posture banner, activity feed, key metrics
-2. **Screening** — Sequence intake (paste or FASTA), DNA/PROTEIN routing, result card
-3. **Inbox** — Queued cases filterable by risk level and status
-4. **Review** — Per-case workflow: NEW → IN_REVIEW → ESCALATED/CLEARED
-5. **Analytics** — Risk distribution charts, flagged-rate trends
-6. **Archive** — Closed cases for audit
-7. **Automation** — Scheduled screening rules
-8. **Intelligence** — Threat feed: active policies (WHO, NSABB, Codex), alerts, research digest
 
 ---
 
@@ -137,31 +123,10 @@ curl -X POST https://seyomi-synthguard-api.hf.space/protein/screen \
   -H "Content-Type: application/json" \
   -d '{"sequence": "MKCILFLMGTCAVLFLM..."}'
 
-# BioLens integration (DNA)
+# BioLens adapter endpoint
 curl -X POST https://seyomi-synthguard-api.hf.space/biolens/screen \
   -H "Content-Type: application/json" \
   -d '{"sequence": "ATGGCTAGCATG...", "seq_type": "DNA"}'
-
-# BioLens integration (PROTEIN)
-curl -X POST https://seyomi-synthguard-api.hf.space/biolens/screen \
-  -H "Content-Type: application/json" \
-  -d '{"sequence": "MKCILFLMGTCAV...", "seq_type": "PROTEIN"}'
-```
-
-**BioLens response contract:**
-
-```json
-{
-  "ok": true,
-  "hazard_score": 0.87,
-  "risk_level": "HIGH",
-  "confidence": 0.91,
-  "category": "Structural toxin redesign",
-  "explanation": "...",
-  "threat_breakdown": {"pathogenicity": 0.9, "evasion": 0.85},
-  "attribution_data": {},
-  "model_name": "synthguard-protein-v4-esm2"
-}
 ```
 
 ---
@@ -171,38 +136,25 @@ curl -X POST https://seyomi-synthguard-api.hf.space/biolens/screen \
 ```
 synthscreen/
 ├── app/
-│   ├── api.py                    # FastAPI — all endpoints including /biolens/screen
-│   ├── space_app.py              # Gradio demo (DNA + Protein tabs)
-│   └── services/                 # Feature extraction, model loading, ESM-2 inference
-├── biolens_update/               # BioLens dashboard source (Track 3, Akhil)
-├── report/
-│   └── synthguard_paper.pdf      # Hackathon submission report
+│   ├── api.py               # FastAPI — /screen, /protein/screen, /biolens/screen
+│   ├── space_app.py         # Gradio demo (DNA + Protein tabs)
+│   └── services/            # Feature extraction, model loading, ESM-2 inference
 ├── scripts/
-│   └── run_pipeline.py           # Full benchmark pipeline
+│   └── run_pipeline.py      # Full benchmark pipeline
+├── report/
+│   └── synthguard_paper.pdf # Hackathon submission report
 └── data/
-    └── processed/                # Built datasets (on HF Hub)
+    └── processed/           # Built datasets (on HF Hub)
 ```
-
----
-
-## HuggingFace Spaces
-
-| Space | SDK | Description |
-|---|---|---|
-| `Seyomi/synthguard-api` | Docker | FastAPI server, CPU-basic, all screening endpoints |
-| `Seyomi/biolens-dashboard` | Docker | Streamlit 8-page operator dashboard, `BIOLENS_MODE=online` |
-| `Seyomi/synthguard-demo` | Gradio | Interactive demo, DNA + Protein Screen tabs |
-
-All models load from `Seyomi/synthguard-kmer` at startup via `snapshot_download`.
 
 ---
 
 ## Limitations
 
 - **Protein FPR ~12.1%** at the REVIEW threshold — calibration needed before production use
-- **Short-seq FPR 8.2%** on <150 bp fragments
+- **Short-seq FPR 8.2%** on < 150 bp fragments
 - **ESM-2 latency 1–3 s/sequence on CPU** — prohibitive for high-throughput batch screening
-- **5 toxin families benchmarked** — ~20+ Tier 1 Select Agent families remain
+- **5 toxin families benchmarked** — ~20+ Tier 1 Select Agent families remain; fold classes absent from training produce near-zero recall
 - **RFdiffusion not evaluated** — *de novo* backbone folds may lie outside ESM-2's learned distribution
 - **No wet-lab validation** — all results are computational
 
