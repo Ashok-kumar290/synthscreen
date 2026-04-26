@@ -623,6 +623,56 @@ def _screen_one(
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
+@app.get("/", include_in_schema=False)
+async def root():
+    return {
+        "name": "SynthGuard API",
+        "description": "AI-era biosecurity screening for DNA and protein sequences. Detects codon-shuffled variants and ProteinMPNN redesigns that evade BLAST-based screening.",
+        "version": "1.0.0",
+        "status": "live",
+        "hackathon": "AIxBio 2026 — Track 1: DNA Screening & Synthesis Controls",
+        "benchmark": {
+            "dna_auroc": 0.968,
+            "blastn_auroc": 0.526,
+            "protein_auroc": 0.944,
+            "blastp_recall": "0%",
+            "ood_auroc": 0.958,
+            "ood_families": 7,
+            "blast_version": "NCBI BLAST+ 2.12.0+",
+            "benchmark_date": "2026-04-26",
+        },
+        "endpoints": {
+            "POST /screen": "Screen a DNA/RNA sequence — returns risk score, decision (SAFE/REVIEW/ESCALATE), GC content, evidence",
+            "POST /screen/batch": "Batch screen up to 100 sequences at once",
+            "POST /protein/screen": "Screen a protein (amino acid) sequence or coding DNA (auto-translated)",
+            "POST /biolens/screen": "BioLens-compatible unified screening endpoint (DNA + protein auto-detected)",
+            "POST /split/submit": "Submit a synthesis fragment for split-order reassembly detection",
+            "GET  /split/customer/{id}": "Retrieve all fragments and assembly alerts for a customer",
+            "GET  /model/info": "Feature names, thresholds, model version metadata",
+            "GET  /health": "Model load status, protein model version (v2-kmer or v4-esm2kmer)",
+            "GET  /docs": "Interactive Swagger UI — try any endpoint in the browser",
+        },
+        "quick_start": {
+            "dna": 'curl -X POST https://seyomi-synthguard-api.hf.space/screen -H "Content-Type: application/json" -d \'{"sequence": "ATGGCTAGCATGACTGGT..."}\'',
+            "protein": 'curl -X POST https://seyomi-synthguard-api.hf.space/protein/screen -H "Content-Type: application/json" -d \'{"sequence": "MKAIFVLKGFF..."}\'',
+            "health": "curl https://seyomi-synthguard-api.hf.space/health",
+            "docs": "https://seyomi-synthguard-api.hf.space/docs",
+        },
+        "models": {
+            "dna_general": "LightGBM + sigmoid calibration, 5533 features (k-mer + RSCU + CAI), sequences ≥150bp",
+            "dna_short": "LightGBM specialist, 5533 features, sequences <150bp",
+            "protein": "LightGBM, 426–906 features (k-mer + ESM-2 embeddings), v4 when GPU available",
+        },
+        "links": {
+            "dataset": "https://huggingface.co/datasets/Seyomi/synthscreen-dataset",
+            "model": "https://huggingface.co/Seyomi/synthguard-kmer",
+            "dashboard": "https://seyomi-biolens-dashboard.hf.space",
+            "demo": "https://seyomi-synthguard-demo.hf.space",
+            "code": "https://github.com/Ashok-kumar290/synthscreen",
+        },
+    }
+
+
 @app.get("/health")
 async def health():
     models_loaded = _general_model is not None
