@@ -365,14 +365,63 @@ _protein_model = None
 _meta = None
 
 
+
+# ── ESM-2 globals (v4 protein model) ─────────────────────────────────────────
+_protein_v3      = False
+_esm2_tokenizer  = None
+_esm2_model      = None
+_esm2_device     = "cpu"
+_ESM2_MODEL_ID   = "facebook/esm2_t12_35M_UR50D"
+
+def _load_esm2():
+    global _esm2_tokenizer, _esm2_model, _esm2_device
+    if _esm2_model is not None:
+        return
+    try:
+        import torch
+        from transformers import AutoTokenizer, AutoModel
+        _esm2_device = "cuda" if torch.cuda.is_available() else "cpu"
+        _esm2_tokenizer = AutoTokenizer.from_pretrained(_ESM2_MODEL_ID)
+        _esm2_model = AutoModel.from_pretrained(_ESM2_MODEL_ID).to(_esm2_device)
+        _esm2_model.eval()
+        print(f"  ESM-2 loaded on {_esm2_device}")
+    except Exception as e:
+        print(f"  ESM-2 load failed (will use k-mer only): {e}")
+
+def _esm2_embed(aa, max_len=512):
+    import torch
+    import numpy as np
+    aa = aa[:max_len]
+    if not aa or _esm2_model is None:
+        return np.zeros(480)
+    inputs = _esm2_tokenizer(aa, return_tensors="pt", truncation=True,
+                             max_length=max_len, padding=False)
+    inputs = {k: v.to(_esm2_device) for k, v in inputs.items()}
+    with torch.no_grad():
+        out = _esm2_model(**inputs)
+    h = out.last_hidden_state[0, 1:-1, :]
+    return (h.mean(0) if h.shape[0] > 0 else h.new_zeros(h.shape[-1])).cpu().numpy()
+
 def _load_models():
-    global _general_model, _short_model, _protein_model, _meta
+    global _general_model, _short_model, _protein_model, _protein_v3, _esm2_model, _meta
     if _general_model is not None:
         return
 
     general_path = MODEL_DIR / "general_model.pkl"
     short_path   = MODEL_DIR / "short_model.pkl"
-    protein_path = MODEL_DIR / "protein_kmer_model.pkl"
+    protein_v4_path = MODEL_DIR / "protein_kmer_v4_esm2.pkl"
+    protein_v3_path = MODEL_DIR / "protein_kmer_v3_esm2.pkl"
+    protein_path    = MODEL_DIR / "protein_kmer_model.pkl"
+    # Download v4 from HF cache if not in MODEL_DIR (MODEL_DIR is read-only)
+    if not protein_v4_path.exists():
+        try:
+            from huggingface_hub import hf_hub_download
+            _cached = hf_hub_download("Seyomi/synthguard-kmer",
+                                      "protein_kmer_v4_esm2.pkl")
+            protein_v4_path = Path(_cached)
+            print(f"  v4 found in HF cache: {protein_v4_path}")
+        except Exception as _e:
+            print(f"  v4 download failed: {_e}")
     meta_path    = MODEL_DIR / "meta.json"
 
     if not general_path.exists():
@@ -385,10 +434,22 @@ def _load_models():
         _general_model = pickle.load(f)
     with open(short_path, "rb") as f:
         _short_model = pickle.load(f)
-    if protein_path.exists():
+    if protein_v4_path.exists():
+        with open(protein_v4_path, "rb") as f:
+            _protein_model = pickle.load(f)
+        _protein_v3 = True
+        print("  Protein k-mer v4 (ESM-2+kmer) loaded.")
+        _load_esm2()
+    elif protein_v3_path.exists():
+        with open(protein_v3_path, "rb") as f:
+            _protein_model = pickle.load(f)
+        _protein_v3 = True
+        print("  Protein k-mer v3 (ESM-2+kmer) loaded.")
+        _load_esm2()
+    elif protein_path.exists():
         with open(protein_path, "rb") as f:
             _protein_model = pickle.load(f)
-        print("  Protein k-mer model loaded.")
+        print("  Protein k-mer v2 loaded.")
     with open(meta_path) as f:
         _meta = json.load(f)
 
@@ -559,10 +620,13 @@ def _screen_one(
 @app.get("/health")
 async def health():
     models_loaded = _general_model is not None
+    protein_version = ("v4-esm2kmer" if _protein_v3 and _esm2_model is not None
+                       else "v2-kmer" if _protein_model is not None else "none")
     return {
         "status": "ok" if models_loaded else "models_not_loaded",
         "models_loaded": models_loaded,
         "model_dir": str(MODEL_DIR),
+        "protein_model": protein_version,
     }
 
 
