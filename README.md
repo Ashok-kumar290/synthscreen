@@ -2,7 +2,7 @@
 
 > A function-aware ML screening engine (Track 1) + practitioner dashboard with pandemic intelligence (Track 3) — built for the AIxBio Hackathon 2026.
 
-**[Live Demo](https://biolens.streamlit.app)** &nbsp;|&nbsp; **[Interactive Docs](docs/index.html)** &nbsp;|&nbsp; **[Full Report](report/funcscreen-report.md)** &nbsp;|&nbsp; **[Submission](docs/hackathon-submission.md)**
+**[Live Demo](https://huggingface.co/spaces/Seyomi/biolens-dashboard)** &nbsp;|&nbsp; **[Full Report](report/funcscreen-report.md)** &nbsp;|&nbsp; **[Submission](docs/hackathon-submission.md)**
 
 ---
 
@@ -87,16 +87,14 @@ funcscreen/
 ├── pages/                    # 8 Streamlit pages (Screening → Reports)
 ├── services/                 # Backend: storage, intelligence, export, model adapter
 ├── data/                     # SQLite DB, demo cases, intelligence feeds
-├── scripts/training/         # Track 1: ESM-2 LoRA + K-mer RF training scripts
-├── configs/                  # Track 1: model training configs
-├── report/                   # Full technical research report
-└── docs/
-    ├── index.html            # Interactive showcase (start here)
-    ├── track1/README.md      # SynthGuard screening engine docs
-    ├── track2/README.md      # Pandemic intelligence layer docs
-    ├── track3/               # BioLens dashboard docs + integration contract
-    └── hackathon-submission.md
+├── scripts/
+│   └── generate_docs.py      # Generates interactive_docs.html from all .md files
+├── Dockerfile
+├── docker-compose.yml
+└── requirements.txt
 ```
+
+Full documentation (track docs, training scripts, research report) lives on the `main` branch.
 
 ---
 
@@ -105,16 +103,16 @@ funcscreen/
 | Branch | Contents |
 |--------|----------|
 | **`main`** | Canonical showcase — BioLens dashboard + all track assets. **Start here for judging.** |
-| `track3/biolens` | Track 3 development history |
-| `master` | Track 1 model development history |
+| `biolens` | Track 2 + Track 3 development history |
+| `synthguard` | Track 1 model development history |
 
 ---
 
 ## Documentation
 
-- **[docs/index.html](docs/index.html)** — Interactive showcase with track cards and demo path
-- **[docs/track1/README.md](docs/track1/README.md)** — SynthGuard model architecture, metrics, quick-start
-- **[docs/track2/README.md](docs/track2/README.md)** — Pandemic intelligence layer and data format
-- **[docs/track3/README.md](docs/track3/README.md)** — BioLens dashboard features and integration contract
-- **[report/funcscreen-report.md](report/funcscreen-report.md)** — Full technical research report
-- **[docs/hackathon-submission.md](docs/hackathon-submission.md)** — Hackathon submission report
+Full documentation is on the `main` branch:
+
+- `docs/track1/README.md` — SynthGuard model architecture, metrics, training quick-start
+- `docs/track2/README.md` — Pandemic intelligence layer and data format
+- `docs/track3/README.md` — BioLens dashboard features and integration contract
+- `report/funcscreen-report.md` — Full technical research report
