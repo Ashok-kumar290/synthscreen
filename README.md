@@ -1,33 +1,32 @@
-# BioLens — AIxBio Hackathon (Track 2 + Track 3)
+# BioLens — AIxBio Hackathon 2026
 
 **Live demo:** [huggingface.co/spaces/Seyomi/biolens-dashboard](https://huggingface.co/spaces/Seyomi/biolens-dashboard)
 
-**Branch:** `biolens` — frozen snapshot of the Track 2 and Track 3 implementation.
-**Related branches:** `master` (Track 1: SynthGuard screening engine), `main` (combined showcase).
+BioLens is a practitioner-facing biosecurity dashboard built for the [AIxBio Hackathon 2026](https://apartresearch.com/sprints/aixbio-hackathon-2026-04-24-to-2026-04-26) (April 24–26, hosted by Apart Research). It addresses a gap identified in the hackathon's Track 3 brief: biosecurity analysts have no unified operational surface. Screening engines, threat intelligence, outbreak signals, and compliance workflows exist in silos — BioLens connects them into a single triage-to-report workflow that runs entirely offline or against a live AI screening API.
+
+The project covers three of the four hackathon tracks. Track 1 (the SynthGuard screening engine) is on a separate branch (`synthguard`) and is the work of a teammate. Tracks 2 and 3 are on this branch.
 
 ---
 
-## Overview
+## Tracks
 
-BioLens is the practitioner-facing biosecurity dashboard built for the AIxBio 2026 hackathon. It represents two of the three project tracks:
+| # | Track | Sponsor | What we built | Branch |
+|---|-------|---------|---------------|--------|
+| 1 | **DNA Screening & Synthesis Controls** | CBAI | ESM-2 + LoRA protein hazard scoring; k-mer DNA triage model | `synthguard` |
+| 2 | **Pandemic Early Warning** | Measuring AI Progress | Threat intelligence feed, outbreak signal aggregation, watchlist engine | `biolens` |
+| 3 | **AI Biosecurity Tools** | Fourth Eon Bio | BioLens: full analyst workflow — intake, triage, review, analytics, automation, compliance export | `biolens` |
 
-| Track | Name | Description | Branch |
-|-------|------|-------------|--------|
-| Track 1 | **SynthGuard** | ESM-2 + LoRA protein screening engine and k-mer DNA triage model | `master` |
-| Track 2 | **Pandemic Intelligence Layer** | Threat intelligence feed, watchlist management, and early-warning alerts | this branch |
-| Track 3 | **BioLens Dashboard** | Streamlit operator interface for sequence intake, triage, review, analytics, automation, and compliance export | this branch |
-
-The three tracks integrate through a single stable interface defined in `services/model_interface.py` (see [Track 1 Integration Contract](#track-1-integration-contract)).
+All three tracks integrate through a single stable interface in `services/model_interface.py` (see [Track 1 Integration Contract](#track-1-integration-contract)).
 
 ---
 
 ## Track 2: Pandemic Intelligence Layer
 
-### Purpose
+### What it does
 
-Track 2 provides contextual awareness for biosecurity analysts. It surfaces outbreak signals, watchlist hits, regulatory updates, and research flags that inform how new sequences should be interpreted. During active high-severity alerts, screening sensitivity is raised for sequences in affected pathogen families.
+The intelligence layer gives analysts real-time situational awareness alongside sequence screening. It aggregates outbreak signals, surveillance anomalies, policy changes, and high-risk research flags into a unified alert feed. When a `HIGH`-severity alert is active, the dashboard surfaces it prominently and raises analyst review sensitivity for sequences in related pathogen families — closing the gap between surveillance signals and lab screening decisions.
 
-### What it monitors
+### Signal types
 
 | Signal Type | Description |
 |-------------|-------------|
@@ -39,13 +38,11 @@ Track 2 provides contextual awareness for biosecurity analysts. It surfaces outb
 
 ### Data sources
 
-- `data/demo_intelligence.json` — Pre-seeded demo alerts for offline and judging use
-- `data/intel_feed.json` — Live intelligence feed slot (populated in production)
-- `services/intelligence.py` — Aggregation, deduplication, severity scoring, watchlist management
+- `data/demo_intelligence.json` — pre-seeded demo alerts for offline and judging use
+- `data/intel_feed.json` — live intelligence feed slot (populated in production)
+- `services/intelligence.py` — aggregation, deduplication, severity scoring, watchlist management
 
 ### Alert schema
-
-Each alert record contains:
 
 ```json
 {
@@ -67,39 +64,39 @@ Each alert record contains:
 **Source types:** `PUBLIC_HEALTH` · `NEWS` · `RESEARCH` · `POLICY` · `SURVEILLANCE` · `MOCK`  
 **Alert statuses:** `NEW` · `REVIEWED` · `WATCHLISTED` · `DISMISSED`
 
-### Integration with Track 3
+### Cross-track integration
 
-- Active `HIGH`-severity alerts automatically raise review sensitivity for sequences matching related pathogen families
-- Case-alert linkages are tracked in the `case_intelligence_links` table
-- Alert statistics (active count, high-severity count, watchlist hits) appear on the Analytics and Home dashboards
+- Active `HIGH`-severity alerts raise review sensitivity for sequences matching related pathogen families
+- Case-alert linkages are tracked in the `case_intelligence_links` SQLite table
+- Alert stats (active count, high-severity count, watchlist hits) feed the Analytics and Home dashboards
 
-### Track 2 limitations
+### Limitations
 
-- **No live scraping** — the intelligence feed is static JSON; no real-time polling or API integration to external sources
-- **Demo data only in offline mode** — `demo_intelligence.json` contains hand-crafted representative signals, not real incident data
-- **No deduplication across runs** — restarting the app re-seeds demo alerts; production would need idempotent upsert logic
+- **No live scraping** — the intelligence feed is static JSON; no real-time polling or external API integration
+- **Demo data only** — `demo_intelligence.json` contains hand-crafted representative signals, not real incident data
+- **No deduplication across runs** — restarting re-seeds demo alerts; production would need idempotent upsert logic
 - **No push notifications** — alerts surface in the UI only; no email, Slack, or webhook delivery
 
 ---
 
 ## Track 3: BioLens Operator Dashboard
 
-### Purpose
+### What it does
 
-BioLens gives biosecurity analysts a full case-management workflow on top of the SynthGuard screening engine. Analysts can screen sequences, triage flagged cases, record decisions, track operational metrics, manage automation rules, and export audit-ready compliance reports — all from a single Streamlit application that runs entirely offline.
+BioLens gives biosecurity analysts a complete case-management workflow on top of the SynthGuard screening engine. A sequence submitted on the Screening page flows automatically through risk scoring, into the analyst inbox, through a structured review and decision process, and finally into audit-ready compliance exports — all without leaving a single Streamlit application that runs entirely offline.
 
 ### Application pages
 
 | File | Page | Purpose |
 |------|------|---------|
-| `app.py` | **Home** | Global threat posture banner, 5 KPI cards, live activity feed, regional threat map, response-time chart, workflow guide |
-| `pages/1_Screening.py` | **Screening** | Sequence intake (paste or FASTA upload); hazard score, risk tier, evidence breakdown; case auto-saved to queue |
+| `app.py` | **Home** | Global threat posture banner, 5 KPI cards, live activity feed, regional threat map, response-time chart |
+| `pages/1_Screening.py` | **Screening** | Sequence intake (paste or FASTA upload); hazard score, risk tier, threat breakdown; case auto-saved to queue |
 | `pages/2_Inbox.py` | **Inbox** | Filterable case queue (by risk level, analyst status); bulk status updates; per-case quick actions |
-| `pages/3_Review.py` | **Review** | Deep-dive investigation: radar chart, risk drivers, threat breakdown; analyst notes; final action; full audit trail |
+| `pages/3_Review.py` | **Review** | Deep-dive investigation: radar chart, risk drivers, analyst notes, final action, full audit trail |
 | `pages/4_Analytics.py` | **Analytics** | Risk distribution, status distribution, activity-over-time, top categories, response-time histogram, alert stats |
 | `pages/5_Intelligence.py` | **Intelligence** | Active alert feed, watchlist management, alert timeline, severity filter, alert statistics |
 | `pages/6_Archive.py` | **Archive** | Closed and cleared cases; historical record browsing |
-| `pages/7_Automation.py` | **Automation** | Create/edit auto-escalation rules; automation log; rule fire counts; enable/disable rules |
+| `pages/7_Automation.py` | **Automation** | Create/edit auto-escalation rules; automation log; rule fire counts; enable/disable |
 | `pages/8_Reports.py` | **Reports** | Export case histories and audit trails as CSV or JSON; date-range filtering |
 
 **Compact mode** (default): Home · Screening · Inbox · Review  
@@ -111,26 +108,25 @@ BioLens gives biosecurity analysts a full case-management workflow on top of the
 Sequence submitted
       │
       ▼
-  [Screening] ─── hazard score + risk tier assigned ──► case saved to DB
+  [Screening] ── hazard score + risk tier assigned ──► case saved to DB
       │
       ▼
-  [Inbox] ──── analyst picks up case (status: NEW → IN_REVIEW)
+  [Inbox] ──── analyst picks up case (NEW → IN_REVIEW)
       │
       ▼
   [Review] ─── deep investigation, notes recorded
       │
-      ├── ESCALATED (needs senior review or external notification)
-      ├── CLEARED (safe to proceed, no further action)
-      └── CLOSED (final action recorded: APPROVE · MANUAL_REVIEW · ESCALATE · HOLD)
+      ├── ESCALATED  (needs senior review or external notification)
+      ├── CLEARED    (safe to proceed, no further action)
+      └── CLOSED     (final action: APPROVE · MANUAL_REVIEW · ESCALATE · HOLD)
 ```
 
 **Analyst statuses:** `NEW` → `IN_REVIEW` → `ESCALATED` → `CLEARED` → `CLOSED`  
-**Final actions:** `APPROVE` · `MANUAL_REVIEW` · `ESCALATE` · `HOLD`  
 **Risk levels:** `SAFE` · `REVIEW` · `HIGH`
 
 ### Automation rules engine
 
-Supervisors define rules that fire automatically when a new case is created:
+Supervisors define rules that fire automatically on every new case:
 
 | Field | Values |
 |-------|--------|
@@ -138,19 +134,19 @@ Supervisors define rules that fire automatically when a new case is created:
 | `trigger_severity` | `LOW` · `MEDIUM` · `HIGH` (active alert severity) |
 | `action` | `AUTO_ESCALATE` · `FLAG_FOR_REVIEW` · `NOTIFY_SUPERVISOR` |
 
-Rules evaluate on every screen submission. Matched rules update the case analyst status immediately and log the match reason to `automation_log`.
+Matched rules update the case analyst status immediately and log the match reason to `automation_log`.
 
 ### Service layer
 
 | Module | Role |
 |--------|------|
-| `services/model_interface.py` | Track 1 integration — single entry point for all screening calls |
+| `services/model_interface.py` | Track 1 integration — sole entry point for all screening calls |
 | `services/storage.py` | SQLite persistence — all CRUD, analytics queries, audit log writes |
 | `services/intelligence.py` | Alert aggregation, deduplication, watchlist management |
-| `services/automation.py` | Rule engine, rule CRUD, automation log, `init_automation_tables()` |
+| `services/automation.py` | Rule engine, rule CRUD, automation log |
 | `services/dashboard.py` | Threat posture computation, activity feed assembly, KPI snapshots |
 | `services/export.py` | `export_screenings_csv()`, `export_screenings_json()`, `build_export_dataset()` |
-| `services/ui.py` | Reusable Streamlit widgets, risk badge rendering, dark-mode CSS injection |
+| `services/ui.py` | Reusable Streamlit widgets, risk badge rendering, dark-mode CSS |
 | `services/sidebar.py` | Global navigation, mode badge, analyst/supervisor role toggle |
 | `services/constants.py` | Enums, style maps, page lists for compact/full UI modes |
 | `services/seed_data.py` | Demo case and alert initialisation for offline mode |
@@ -198,21 +194,21 @@ automation_log
   match_reason, fired_at
 ```
 
-### Track 3 limitations
+### Limitations
 
-- **No real authentication** — the Analyst / Supervisor role toggle in the sidebar is UI-only; there is no session management or access control
-- **Single-user SQLite** — the database does not support concurrent multi-analyst access; concurrent writes will cause contention
-- **Sequence attribution is illustrative** — in offline mode, the residue-level highlighting is placeholder logic, not real attribution from the model
-- **Radar chart dimensions are heuristic** — Toxicity / Pathogenicity / Environmental Risk values are derived from hazard score + category, not separate model outputs
-- **No notification delivery** — `NOTIFY_SUPERVISOR` automation action sets a flag in the log; no email, webhook, or push is sent
-- **Docker is single-container** — no orchestration or horizontal scaling; the persistent volume is local to one host
-- **No sequence deduplication** — the same sequence can be submitted multiple times and creates duplicate cases
+- **No real authentication** — the Analyst / Supervisor toggle is UI-only; no session management or access control
+- **Single-user SQLite** — concurrent multi-analyst writes will cause contention
+- **Sequence attribution is illustrative** — in offline mode, residue-level highlighting uses heuristic logic, not real model attribution
+- **Radar chart dimensions are heuristic** — Pathogenicity / Evasion / Synthesis Feasibility / Environmental Resilience / Host Range are derived from the offline heuristic, not separate model outputs
+- **No notification delivery** — `NOTIFY_SUPERVISOR` logs the action; no email, webhook, or push is sent
+- **Docker is single-container** — no orchestration or horizontal scaling
+- **No sequence deduplication** — the same sequence can be submitted multiple times
 
 ---
 
 ## Track 1 Integration Contract
 
-All SynthGuard calls flow through one function in one module:
+All SynthGuard calls flow through one function:
 
 ```python
 # services/model_interface.py
@@ -239,27 +235,31 @@ def screen_sequence(sequence: str, seq_type: str) -> dict:
     "baseline_result": str | None, # Optional baseline comparison text
     "model_name": str,             # Audit identifier
     "data_source": str,            # "synthguard-api" | "biolens-offline"
+    "threat_breakdown": dict | None, # pathogenicity, evasion_potential, synthesis_feasibility,
+                                     # environmental_resilience, host_range (0.0–1.0 each)
+    "attribution_data": dict | None, # residue positions and scores for highlight rendering
     "error": str | None            # Machine-readable error when ok=False
 }
 ```
 
 ### Dual-engine behaviour
 
-| Mode | DNA sequences | Protein sequences |
-|------|--------------|-------------------|
-| `online` | POST to `SYNTHSCREEN_ENDPOINT` (SynthGuard API) | Local BioLens heuristic (API is DNA-only) |
-| `offline` | Local BioLens heuristic | Local BioLens heuristic |
+| Mode | DNA | Protein |
+|------|-----|---------|
+| `online` | POST `/biolens/screen` on SynthGuard API | POST `/biolens/screen` on SynthGuard API |
+| `offline` | BioLens built-in heuristic | BioLens built-in heuristic |
 
 ### Offline heuristic
 
-The offline heuristic is **not a real ML model**. It uses a deterministic hash of the input sequence to generate a reproducible hazard score and category label. Its sole purpose is to allow the full UI workflow to run without a GPU or API dependency. Results are meaningless from a biosecurity perspective.
+The offline heuristic is **not a real ML model**. For DNA it combines GC content deviation, motif density (`ATG`, `TATA`, `CGCG`, `GGG`), repeat runs, and N-fraction with a deterministic hash of the sequence to produce a reproducible hazard score. For protein it uses hydrophobic/charged amino acid fractions, low-complexity, and motif density (`KK`, `RR`, `KR`, `GP`, `GG`). Its sole purpose is to let the full UI workflow run without a network connection or GPU. Scores are meaningless from a real biosecurity perspective.
 
-### Validation rules
+### Validation
 
 - DNA alphabet: `A C G T N`
 - Protein alphabet: `A B C D E F G H I K L M N P Q R S T V W X Y Z *`
 - Max sequence length: 50 KB
-- Common error codes: `empty_sequence_input`, `invalid_dna_characters:<chars>`, `integration_timeout_error`, `integration_connection_error`
+- Short sequences (<20 bp/aa) trigger an elevated-uncertainty note in the explanation field
+- Common error codes: `empty_sequence_input`, `invalid_dna_characters:<chars>`, `api_timeout`, `api_http_error:<code>`, `api_connection_error:<reason>`
 
 ### Default API endpoint
 
@@ -267,7 +267,7 @@ The offline heuristic is **not a real ML model**. It uses a deterministic hash o
 https://seyomi-synthguard-api.hf.space/biolens/screen
 ```
 
-Override with `SYNTHSCREEN_ENDPOINT` env var.
+Override with the `SYNTHSCREEN_ENDPOINT` env var.
 
 ---
 
@@ -279,7 +279,7 @@ Override with `SYNTHSCREEN_ENDPOINT` env var.
 
 Runs in `online` mode against the SynthGuard API. No installation required.
 
-### Docker (recommended)
+### Docker (recommended for local use)
 
 ```bash
 docker compose up --build
@@ -301,7 +301,7 @@ streamlit run app.py
 | `BIOLENS_MODE` | `offline` | `offline` / `online` | Screening engine: local heuristic vs. SynthGuard API |
 | `BIOLENS_UI_MODE` | `compact` | `compact` / `full` | Sidebar nav: 4-page demo path vs. all 9 pages |
 | `SYNTHSCREEN_ENDPOINT` | `https://seyomi-synthguard-api.hf.space/biolens/screen` | Any URL | SynthGuard API base URL (online mode only) |
-| `SYNTHSCREEN_TIMEOUT_SECONDS` | `30` | Number | API call timeout in seconds |
+| `SYNTHSCREEN_TIMEOUT_SECONDS` | `15` | Number | API call timeout in seconds |
 | `BIOLENS_DB_PATH` | `/app/data/biolens.db` | File path | SQLite database location |
 
 The UI mode can also be toggled at runtime via the sidebar without restarting.
@@ -310,14 +310,14 @@ The UI mode can also be toggled at runtime via the sidebar without restarting.
 
 ## Demo Walkthrough
 
-1. **Home** — check the threat posture banner, activity feed, and KPI cards
-2. **Screening** — paste a sequence and click Screen; observe hazard score and risk tier
+1. **Home** — review the threat posture banner, KPI cards, and live activity feed
+2. **Screening** — paste a sequence and click Screen; observe hazard score, risk tier, and threat breakdown
    - Sample DNA: `ATGAAAGCAATTTTCGTACTGAAAGGTTTTGTTGGTTTTCTTGCATTTTTTTATAATGTT`
    - Sample protein: `MKALFILGLLFCFATAAADYKDDDDKGIPLEFSKDLDKYAQYTLNRDRGFHIGDKLISAL`
-3. **Inbox** — find the newly created case in the queue; open it
+3. **Inbox** — find the newly created case in the queue
 4. **Review** — examine the radar chart and risk drivers; record analyst notes; set a final action
 5. **Analytics** — verify the risk distribution and response-time charts updated
-6. **Intelligence** — browse active alerts and watchlist entries; check severity breakdown
+6. **Intelligence** — browse active alerts and watchlist entries
 
 ---
 
@@ -334,7 +334,7 @@ funcscreen/
 │   ├── 5_Intelligence.py         # Biosecurity alerts and watchlist (Track 2)
 │   ├── 6_Archive.py              # Closed cases
 │   ├── 7_Automation.py           # Auto-escalation rule management
-│   └── 8_Reports.py              # Export and compliance reports
+│   └── 8_Reports.py              # Compliance export
 ├── services/
 │   ├── __init__.py               # App bootstrap, runtime mode init
 │   ├── constants.py              # Enums, style maps, page lists
@@ -354,13 +354,13 @@ funcscreen/
 │   ├── intel_feed.json           # Live intelligence feed slot
 │   └── sample_dataset.json       # Example sequences for testing
 ├── scripts/
-│   └── generate_docs.py          # Builds docs/interactive_docs.html from all .md files (output gitignored)
+│   └── generate_docs.py          # Generates docs/interactive_docs.html from all .md files (output gitignored)
 ├── Dockerfile                    # Python 3.11-slim Streamlit container
 ├── docker-compose.yml            # Single-service orchestration with persistent volume
 ├── requirements.txt              # streamlit, plotly, pandas
 ├── .dockerignore
 ├── .gitignore
-└── README.md                     # This file
+└── README.md
 ```
 
 ---
@@ -374,4 +374,4 @@ funcscreen/
 | Data processing | Pandas ≥ 2.2 |
 | Persistence | SQLite 3 |
 | Container | Docker (Python 3.11-slim) |
-| Track 1 API | HTTP/JSON (urllib) |
+| Track 1 API | HTTP/JSON (urllib, stdlib only) |
