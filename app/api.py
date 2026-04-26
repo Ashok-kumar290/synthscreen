@@ -505,14 +505,20 @@ def _screen_protein(aa: str, threshold_review=0.3, threshold_escalate=0.6) -> di
     if _protein_model is None:
         return {"error": "protein_model_not_loaded", "risk_score": None, "decision": None}
     import numpy as np
-    feats = np.array([_protein_features(aa)])
+    kmer_feats = _protein_features(aa)
+    if _protein_v3:
+        esm_feats = _esm2_embed(aa).tolist()
+        feats = np.array([kmer_feats + esm_feats])
+    else:
+        feats = np.array([kmer_feats])
     prob = float(_protein_model.predict_proba(feats)[0, 1])
     if prob >= threshold_escalate:   decision = "ESCALATE"
     elif prob >= threshold_review:   decision = "REVIEW"
     else:                            decision = "ALLOW"
+    model_tag = "protein-kmer-v4-esm2" if _protein_v3 else "protein-kmer-v2"
     return {"risk_score": round(prob, 4), "decision": decision,
             "sequence_length": len(aa), "sequence_type": "PROTEIN",
-            "model_used": "protein-kmer"}
+            "model_used": model_tag}
 
 
 # ── Request / Response schemas ────────────────────────────────────────────────
