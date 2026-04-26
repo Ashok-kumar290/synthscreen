@@ -1,6 +1,6 @@
 # SynthGuard & BioLens: Unified Biosecurity Screening
 
-> A function-aware ML screening engine (Track 1) + practitioner dashboard with pandemic intelligence (Track 3) — built for the AIxBio Hackathon 2026.
+> Track 1 (DNA/protein screening engine) + Track 2 (pandemic intelligence layer) + Track 3 (practitioner dashboard) — built for the AIxBio Hackathon 2026.
 
 **[Live Demo](https://huggingface.co/spaces/Seyomi/biolens-dashboard)** &nbsp;|&nbsp; **[Full Report](report/funcscreen-report.md)** &nbsp;|&nbsp; **[Submission](docs/hackathon-submission.md)**
 
@@ -83,18 +83,33 @@ Set `BIOLENS_MODE=demo` to pre-seed all cases and intelligence data (default in 
 
 ```
 funcscreen/
-├── app.py                    # BioLens entry point (home dashboard)
-├── pages/                    # 8 Streamlit pages (Screening → Reports)
-├── services/                 # Backend: storage, intelligence, export, model adapter
-├── data/                     # SQLite DB, demo cases, intelligence feeds
+├── app.py                        # BioLens entry point (home dashboard)
+├── pages/                        # 8 Streamlit pages (Screening → Reports)
+├── services/                     # Backend: storage, intelligence, export, model adapter
+├── data/                         # SQLite DB, demo cases, intelligence feeds
 ├── scripts/
-│   └── generate_docs.py      # Generates interactive_docs.html from all .md files
+│   ├── training/
+│   │   ├── train_esm2.py         # Track 1: ESM-2 LoRA fine-tuning (8-bit QLoRA)
+│   │   ├── train_kmer_robust.py  # Track 1: K-mer Random Forest with robust CV
+│   │   └── train_v4_robust.py    # Track 1: v4 pipeline — focal loss + hard example mining
+│   ├── generate_docs.py          # Generates docs/interactive_docs.html from all .md files
+│   ├── hf_upload.py              # HuggingFace Space deployment script
+│   └── sync_assets.py            # Asset sync utility
+├── configs/
+│   ├── esm2_v4.json              # Base ESM-2 training config
+│   └── esm2_v4.1_augmented.json  # Augmented config with hard mining + contrastive loss
+├── docs/
+│   ├── index.html                # Interactive project showcase
+│   ├── track1/README.md          # SynthGuard model architecture, metrics, quick-start
+│   ├── track2/README.md          # Pandemic intelligence layer and data format
+│   ├── track3/README.md          # BioLens dashboard features and integration contract
+│   └── track3/integration_contract.md  # Full adapter interface specification
+├── report/
+│   └── funcscreen-report.md      # Full technical research report
 ├── Dockerfile
 ├── docker-compose.yml
 └── requirements.txt
 ```
-
-Full documentation (track docs, training scripts, research report) lives on the `main` branch.
 
 ---
 
@@ -110,9 +125,8 @@ Full documentation (track docs, training scripts, research report) lives on the 
 
 ## Documentation
 
-Full documentation is on the `main` branch:
-
-- `docs/track1/README.md` — SynthGuard model architecture, metrics, training quick-start
-- `docs/track2/README.md` — Pandemic intelligence layer and data format
-- `docs/track3/README.md` — BioLens dashboard features and integration contract
-- `report/funcscreen-report.md` — Full technical research report
+- **[docs/track1/README.md](docs/track1/README.md)** — SynthGuard model architecture, performance metrics, training quick-start
+- **[docs/track2/README.md](docs/track2/README.md)** — Pandemic intelligence layer, signal types, data format
+- **[docs/track3/README.md](docs/track3/README.md)** — BioLens dashboard features, analyst workflow, integration contract
+- **[report/funcscreen-report.md](report/funcscreen-report.md)** — Full technical research report
+- **[docs/hackathon-submission.md](docs/hackathon-submission.md)** — Hackathon submission *(coming soon)*
