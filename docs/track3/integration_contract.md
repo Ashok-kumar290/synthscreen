@@ -36,6 +36,11 @@ def screen_sequence(sequence: str, seq_type: str) -> dict:
     "ok": bool,
     "hazard_score": float | None,       # 0.0 to 1.0, normalized
     "risk_level": str | None,           # "SAFE" | "REVIEW" | "HIGH"
+    "model_hazard_score": float | None, # Raw model score before intelligence adjustment
+    "model_risk_level": str | None,     # Raw model tier before intelligence adjustment
+    "intel_modifier": float | None,     # Watchlist-driven score adjustment
+    "effective_hazard_score": float | None, # Intelligence-adjusted operational score
+    "effective_risk_level": str | None, # Intelligence-adjusted operational tier
     "confidence": float | None,         # 0.0 to 1.0, normalized
     "category": str | None,             # Predicted functional category
     "explanation": str | None,          # Short, readable reasoning
@@ -58,8 +63,9 @@ def screen_sequence(sequence: str, seq_type: str) -> dict:
 ### `hazard_score`
 
 - Normalized float in `[0.0, 1.0]`
-- Used for sorting, analytics, and risk tier assignment
+- Used for sorting, analytics, and operational risk tier assignment
 - Higher values indicate higher concern
+- When intelligence context matches, this mirrors `effective_hazard_score`; raw model output is preserved in `model_hazard_score`
 
 ### `risk_level`
 
@@ -71,10 +77,10 @@ Must be one of:
 | `REVIEW` | Ambiguous signal requiring analyst review |
 | `HIGH` | Elevated concern, should be escalated |
 
-Thresholds in mock mode:
-- `hazard_score >= 0.72` → `HIGH`
-- `hazard_score >= 0.42` → `REVIEW`
-- `hazard_score < 0.42` → `SAFE`
+Operational thresholds:
+- `hazard_score >= 0.60` → `HIGH`
+- `hazard_score >= 0.30` → `REVIEW`
+- `hazard_score < 0.30` → `SAFE`
 
 ### `confidence`
 

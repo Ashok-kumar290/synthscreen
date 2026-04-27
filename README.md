@@ -1,6 +1,6 @@
 # SynthGuard & BioLens: Unified Biosecurity Screening
 
-> Track 1 (DNA/protein screening engine) + Track 2 (pandemic intelligence layer) + Track 3 (practitioner dashboard) — built for the AIxBio Hackathon 2026.
+> Final submission tracks: Track 1 (DNA/protein screening engine) + Track 3 (practitioner dashboard) — built for the AIxBio Hackathon 2026. BioLens includes a Track-2-inspired intelligence layer, but it is not submitted as a full Track 2 pandemic early-warning system.
 
 **[Live Demo](https://huggingface.co/spaces/Seyomi/biolens-dashboard)** &nbsp;|&nbsp; **[Full Report](report/funcscreen-report.md)** &nbsp;|&nbsp; **[Submission](docs/hackathon-submission.md)**
 
@@ -44,10 +44,27 @@ BioLens + SynthGuard address both — with a complementary ML triage layer and a
   │  Dashboard         │           SQLite case management
   │  ┌──────────────┐  │           Audit trail + export
   │  │ Intelligence │  │
-  │  │ Feed (T2)    │  │  Track 2 — Outbreak alerts, watchlists,
-  │  └──────────────┘  │           regulatory updates
+  │  │ Feed         │  │  Track-2-inspired — demo/operator-curated
+  │  └──────────────┘  │           alerts, watchlists, triage modifiers
   └────────────────────┘
 ```
+
+The intelligence module uses demo/operator-curated alerts, watchlists, and triage modifiers rather than live external surveillance ingestion.
+
+---
+
+## Intelligence-Aware Triage Persistence
+
+BioLens persists both raw model output and intelligence-adjusted operational triage:
+
+| Field | Meaning |
+|-------|---------|
+| `model_hazard_score` / `model_risk_level` | Raw SynthGuard or BioLens model output |
+| `intel_modifier` | Watchlist-driven score adjustment |
+| `effective_hazard_score` / `effective_risk_level` | Intelligence-adjusted triage result |
+| `hazard_score` / `risk_level` | Operational score used by Inbox, Review, Analytics, Reports, and Archive |
+
+Operational risk tiers use the paper-aligned thresholds: `SAFE < 0.30`, `REVIEW >= 0.30`, `HIGH >= 0.60`.
 
 ---
 
@@ -118,7 +135,7 @@ funcscreen/
 | Branch | Contents |
 |--------|----------|
 | **`main`** | Canonical showcase — BioLens dashboard + all track assets. **Start here for judging.** |
-| `biolens` | Track 2 + Track 3 development history |
+| `biolens` | Track 3 dashboard development history, including Track-2-inspired intelligence support |
 | `synthguard` | Track 1 model development history |
 
 ---
@@ -126,7 +143,7 @@ funcscreen/
 ## Documentation
 
 - **[docs/track1/README.md](docs/track1/README.md)** — SynthGuard model architecture, performance metrics, training quick-start
-- **[docs/track2/README.md](docs/track2/README.md)** — Pandemic intelligence layer, signal types, data format
+- **[docs/track2/README.md](docs/track2/README.md)** — Track-2-inspired intelligence layer, signal types, data format
 - **[docs/track3/README.md](docs/track3/README.md)** — BioLens dashboard features, analyst workflow, integration contract
 - **[report/funcscreen-report.md](report/funcscreen-report.md)** — Full technical research report
 - **[docs/hackathon-submission.md](docs/hackathon-submission.md)** — Hackathon submission *(coming soon)*

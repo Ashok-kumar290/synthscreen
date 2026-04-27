@@ -1,6 +1,6 @@
-# Pandemic Intelligence Layer (Track 2)
+# Track-2-Inspired Intelligence Layer
 
-The Pandemic Intelligence layer aggregates early-warning signals into BioLens, giving biosecurity analysts real-time situational awareness alongside sequence screening. Rather than being a standalone tool, it is embedded directly into the BioLens dashboard as a live intelligence feed.
+The intelligence layer gives BioLens analysts situational awareness alongside sequence screening. It is Track-2-inspired support for the Track 3 dashboard, not a full submitted Track 2 pandemic early-warning system. The current prototype uses demo/operator-curated alerts, watchlists, and triage modifiers rather than live external surveillance ingestion.
 
 ---
 
@@ -29,7 +29,7 @@ pages/5_Intelligence.py   ←─ BioLens Intelligence dashboard page
 ```
 
 - **`services/intelligence.py`**: Loads, deduplicates, and severity-scores alerts from the intelligence data sources.
-- **`data/intel_feed.json`**: Live intelligence feed (periodic refresh in production).
+- **`data/intel_feed.json`**: Reserved future feed slot for production external intelligence integration.
 - **`data/demo_intelligence.json`**: Pre-seeded demo signals for offline showcase/judging.
 - **`pages/5_Intelligence.py`**: Streamlit page rendering the feed, with filtering by severity, category, and date.
 
@@ -37,7 +37,7 @@ pages/5_Intelligence.py   ←─ BioLens Intelligence dashboard page
 
 ## Integration with Screening (Track 1)
 
-Intelligence signals influence screening thresholds in the BioLens Screening page. When an active high-severity alert matches a pathogen family, the dashboard automatically raises the review sensitivity for sequences in that class — reducing the risk that a borderline sequence slips through during an active threat window.
+Intelligence signals influence operational triage in the BioLens Screening page. When an active watchlist item matches a screening result, BioLens records the raw model output, the intelligence modifier, and the adjusted operational score used by the analyst workflow.
 
 ---
 
@@ -68,7 +68,7 @@ Each intelligence signal follows this structure:
 |------|----------------------|
 | `mock` | No intelligence data; feed shows empty state |
 | `demo` | Pre-seeded `demo_intelligence.json` loaded at startup |
-| `integrated` | Polls `intel_feed.json` for periodic updates (production) |
+| `integrated` | Reserved for future production external intelligence integration |
 
 Set the runtime mode via the `BIOLENS_MODE` environment variable or the sidebar toggle in BioLens.
 

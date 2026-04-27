@@ -30,6 +30,7 @@ from services.intelligence import (
     compute_intelligence_risk_modifier,
     get_active_threat_regions,
 )
+from services.risk_scoring import apply_intelligence_adjustment
 from services.automation import evaluate_auto_rules
 
 def parse_fasta_records(raw_text: str) -> list[dict[str, str]]:
@@ -81,16 +82,17 @@ def render_result_card(item: dict[str, Any]) -> None:
     result = item["result"]
     risk_level = result["risk_level"]
     risk_color = RISK_COLORS.get(risk_level, "transparent")
-    intel_modifier = item.get("intel_modifier", 0.0)
+    intel_modifier = result.get("intel_modifier", item.get("intel_modifier", 0.0))
     
     modifier_html = ""
     if intel_modifier > 0:
-        effective = min(1.0, result["hazard_score"] + intel_modifier)
+        model_score = result.get("model_hazard_score", result["hazard_score"])
+        effective_score = result.get("effective_hazard_score", result["hazard_score"])
         modifier_html = f"""
 <div style="display:inline-flex; align-items:center; gap:0.4rem; background:rgba(243,156,18,0.12);
             border:1px solid #f39c12; border-radius:6px; padding:0.25rem 0.6rem;
             font-size:0.82rem; font-weight:600; color:#8a4c00; margin-top:0.4rem;">
-    ⚡ Intel Modifier: +{intel_modifier:.3f} → Effective Score: {effective:.3f}
+    ⚡ Intel Modifier: +{intel_modifier:.3f} | Model Score: {model_score:.3f} -&gt; Effective Score: {effective_score:.3f}
 </div>"""
     
     card_html = f"""
@@ -184,13 +186,18 @@ with input_col:
                     "sequence_type": sequence_type,
                 })
                 intel_modifier = compute_intelligence_risk_modifier(intel_matches)
+                adjusted_result = (
+                    apply_intelligence_adjustment(result, intel_modifier)
+                    if result.get("ok")
+                    else result
+                )
                 
                 run_results.append(
                     {
                         "label": submission["label"],
                         "sequence": submission["sequence"],
                         "sequence_type": sequence_type,
-                        "result": result,
+                        "result": adjusted_result,
                         "intelligence_matches": intel_matches,
                         "intel_modifier": intel_modifier,
                     }

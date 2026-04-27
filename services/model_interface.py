@@ -7,6 +7,7 @@ from typing import Any
 from urllib import error, request
 
 from services.constants import RISK_LEVELS
+from services.risk_scoring import risk_level_from_score
 
 
 DNA_ALPHABET = set("ACGTN")
@@ -115,14 +116,6 @@ def _validate_sequence(sequence: str, seq_type: str) -> tuple[str | None, str | 
     return normalized, None
 
 
-def _risk_level_from_score(score: float) -> str:
-    if score >= 0.72:
-        return "HIGH"
-    if score >= 0.42:
-        return "REVIEW"
-    return "SAFE"
-
-
 def _pick_category(seq_type: str, risk_level: str, sequence: str) -> str:
     bank = CATEGORY_BANK[seq_type][risk_level]
     index = int(_hash_unit(seq_type, risk_level, sequence) * len(bank)) % len(bank)
@@ -205,7 +198,7 @@ def _screen_offline(sequence: str, seq_type: str, model_name: str, data_source: 
         attr_scores = [round(_clamp(0.5 + hash_factor * 0.5), 3) for _ in attr_positions]
         regions = [{"start": 0, "end": min(20, length), "label": "Charged cluster", "score": round(pathogenicity, 3)}]
 
-    risk_level = _risk_level_from_score(score)
+    risk_level = risk_level_from_score(score)
     category = _pick_category(seq_type, risk_level, sequence)
 
     return {

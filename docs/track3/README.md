@@ -21,8 +21,8 @@ It specifically addresses the operational needs of biosecurity analysts by abstr
 - **Final Actions:** Cases can be assigned definitive outcomes such as `APPROVE`, `REJECT`, or `MODIFY`, complete with detailed analyst notes.
 
 ### 4. Biosecurity Intelligence Feed
-- **Live Context:** A dedicated intelligence page provides up-to-date policy and regulatory guidelines that shape the screening thresholds.
-- **Alerts & Research:** Displays emerging biosecurity alerts and recent research insights, keeping practitioners informed on the broader landscape.
+- **Curated Context:** A dedicated intelligence page provides demo/operator-curated alerts, watchlists, and policy context that can adjust operational triage.
+- **Alerts & Research:** Displays representative biosecurity alerts and research signals, keeping practitioners informed on the broader landscape.
 
 ### 5. Analytics & Audit Trails
 - **Operational Metrics:** High-level dashboard views for tracked metrics like average hazard score, flagged case volume, and open queue status.
@@ -35,10 +35,10 @@ It specifically addresses the operational needs of biosecurity analysts by abstr
 
 ## Integration with Other Tracks
 
-BioLens is the practitioner surface for the full three-track ecosystem:
+BioLens is the practitioner surface for the Track 1 + Track 3 final submission:
 
 - **Track 1 (SynthGuard):** The sequence risk scoring engine behind the Screening page. BioLens calls it via `services/model_interface.py` — see [`docs/track1/README.md`](../track1/README.md) and [`integration_contract.md`](integration_contract.md) for the adapter spec.
-- **Track 2 (Pandemic Intelligence):** Early-warning signals displayed on the Intelligence page. See [`docs/track2/README.md`](../track2/README.md) for the data format and feed architecture.
+- **Track-2-inspired intelligence support:** Demo/operator-curated signals are displayed on the Intelligence page and can adjust operational triage. See [`docs/track2/README.md`](../track2/README.md) for the data format and feed architecture.
 
 In `demo` mode, both the SynthGuard screening results and the intelligence feed run from pre-seeded local data — no external service needed.
 
